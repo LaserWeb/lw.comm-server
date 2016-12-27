@@ -31,6 +31,7 @@ var websockets = require('socket.io');
 var app = require('http').createServer(handler);
 var io = websockets.listen(app);
 var telnet = require('telnet-client');
+var WebSocket = require('ws');
 var fs = require('fs');
 var nstatic = require('node-static');
 var EventEmitter = require('events').EventEmitter;
@@ -45,7 +46,7 @@ var connections = [];
 var portType; 
 var port, isConnected, connectedTo;
 var telnetConnection, telnetConnected; 
-var espSocket, espConnected, espBuffer;
+var espSocket, espConnected, espIP, espBuffer;
 var statusLoop, queueCounter;
 var gcodeQueue; gcodeQueue = [];
 var lastSent = "", paused = false, blocked = false;
@@ -134,7 +135,7 @@ io.sockets.on('connection', function (appSocket) {
 
     appSocket.on('connectTo', function (data) { // If a user picks a port to connect to, open a Node SerialPort Instance to it
         data = data.split(',');
-        console.log(chalk.yellow('WARN:'), chalk.blue('Connecting to Port ' + data));
+        console.log(chalk.yellow('WARN:'), chalk.blue('Connecting to ' + data));
         if (!isConnected) {
             portType = data[0];
             switch (portType) {
@@ -164,14 +165,14 @@ io.sockets.on('connection', function (appSocket) {
                     });
 
                     port.on('close', function () { // open errors will be emitted as an error event
-                        if (isConnected) {
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            isConnected = false;
-                            connectedTo = false;
-                            io.sockets.emit("connectStatus", 'Connect');
-                            console.log(chalk.yellow('WARN:'), chalk.blue('Port closed ' + port.path));
-                        }
+                        clearInterval(queueCounter);
+                        clearInterval(statusLoop);
+                        isConnected = false;
+                        connectedTo = false;
+                        paused = false;
+                        blocked = false;
+                        io.sockets.emit("connectStatus", 'Connect');
+                        console.log(chalk.yellow('WARN:'), chalk.blue('Port closed ' + port.path));
                     });
 
                     port.on('error', function (err) { // open errors will be emitted as an error event
@@ -297,7 +298,6 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 
                 case 'telnet':
-                    console.log('Telnet:', 'connecting to ' + data[1]);
                     telnetConnection = new telnet();
                     var params = {
                       host: data[1],
@@ -327,20 +327,21 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                     
                 case 'esp8266':
-                    espSocket = websockets('ws://'+data[1]+'/');// connect to ESP websocket
-                    //espSocket.binaryType = "arraybuffer";
-                    io.sockets.emit("connectStatus", 'opening:' + data[1]);
+                    espIP = data[1];
+                    espSocket = new WebSocket('ws://'+espIP+'/'); // connect to ESP websocket
+                    io.sockets.emit("connectStatus", 'opening:' + espIP);
                     
                     // ESP socket evnets -----------------------------------------------        
                     espSocket.on('open', function (e) {
-                        io.sockets.emit("connectStatus", 'opened:' + data[1]);
-                        console.log(chalk.yellow('ESP:'), 'Socket opened: ' + e);
+                        io.sockets.emit("connectStatus", 'opened:' + espIP);
+                        console.log(chalk.yellow('WARN:'), chalk.blue('ESP connected @ ' + espIP));
                         espConnected = true;
                         espSocket.send('version\n');
                         statusLoop = setInterval(function () {
-                            if (espSocket.readyState === '1') {
+                            if (espConnected) {
                                 espSocket.send('?');
                             } else {
+                                clearInterval(statusLoop);
                                 console.log(chalk.yellow('WARN:'), 'Unable to send gcode (not connected to ESP): ' + e);
                             }
                         }, 250);
@@ -348,8 +349,11 @@ io.sockets.on('connection', function (appSocket) {
 
                     espSocket.on('close', function (e) {
                         espConnected = false;
-                        io.sockets.emit("connectStatus", 'Connect'); // change button to connect again
-                        console.log(chalk.yellow('WARN:'), 'ESP socket closed: ' + e);
+                        espIP = false;
+                        paused = false;
+                        blocked = false;
+                        io.sockets.emit("connectStatus", 'Connect');
+                        console.log(chalk.yellow('WARN:'), chalk.blue('ESP connection closed'));
                     });
 
                     espSocket.on('error', function (e) {
@@ -358,62 +362,63 @@ io.sockets.on('connection', function (appSocket) {
                     });
 
                     espSocket.on('message', function (e) {
-                        // console.log(e.data)
-                        var data = "";
-                        var i;
-                        if (e.data instanceof ArrayBuffer) {
-                            var bytes = new Uint8Array(e.data);
-                            for (i = 0; i < bytes.length; i++) {
-                                data += String.fromCharCode(bytes[i]);
-                            }
-                        } else {
-                            data = e.data;
-                        }
-
-                        espBuffer += data;
-                        var split = data.split("\n");
-                        espBuffer = split.pop(); //last not fin data back to buffer
-                        // console.log(split)
-                        for (i = 0; i < split.length; i++) {
-                            var response = split[i];
-                            console.log('ESP:', response);
-                            if (response.indexOf('Grbl') === 0) { // Check if it's Grbl
-                                firmware = 'grbl';
-                                fVersion = response.substr(5, 4); // get version
-                                console.log('GRBL detected (' + fVersion + ')');
-                                // Start intervall for status queries
-                                statusLoop = setInterval(function () {
-                                    if (isConnected) {
-                                        port.write('?');
-                                    }
-                                }, 250);
-                            }
-                            if (response.indexOf('LPC176') >= 0) { // LPC1768 or LPC1769 should be Smoothie
-                                firmware = 'smoothie';
-                                var startPos = response.search(/Version:/i) + 9;
-                                fVersion = response.substr(startPos).split(/,/, 1);
-                                console.log('Smoothieware detected (' + fVersion + ')');
-                                // Start intervall for status queries
-                                statusLoop = setInterval(function () {
-                                    if (isConnected) {
-                                        port.write('?');
-                                    }
-                                }, 250);
-                            }
-                            if (response.indexOf("ok") === 0) { // Got an OK so we are clear to send
-                                blocked = false;
-                                if (firmware === 'grbl') {
-                                    grblBufferSize.shift();
-                                }
-                                send1Q();
-                            }
-                            if (response.indexOf("error") === 0) {
-                                if (firmware === 'grbl') {
-                                    grblBufferSize.shift();
-                                }
-                            }
-                            io.sockets.emit("data", response);
-                        }
+                        //console.log('ESP:', e);
+                        //io.sockets.emit("data", data);
+//                        var data = "";
+//                        var i;
+//                        if (e.data instanceof ArrayBuffer) {
+//                            var bytes = new Uint8Array(e.data);
+//                            for (i = 0; i < bytes.length; i++) {
+//                                data += String.fromCharCode(bytes[i]);
+//                            }
+//                        } else {
+//                            data = e.data;
+//                        }
+//
+//                        espBuffer += data;
+//                        var split = espBuffer.split()"\n");
+//                        espBuffer = split.pop(); //last not fin data back to buffer
+//                        // console.log(split)
+//                        for (i = 0; i < split.length; i++) {
+//                            var response = split[i];
+//                            console.log('ESP:', response);
+//                            if (response.indexOf('Grbl') === 0) { // Check if it's Grbl
+//                                firmware = 'grbl';
+//                                fVersion = response.substr(5, 4); // get version
+//                                console.log('GRBL detected (' + fVersion + ')');
+//                                // Start intervall for status queries
+//                                statusLoop = setInterval(function () {
+//                                    if (isConnected) {
+//                                        port.write('?');
+//                                    }
+//                                }, 250);
+//                            }
+//                            if (response.indexOf('LPC176') >= 0) { // LPC1768 or LPC1769 should be Smoothie
+//                                firmware = 'smoothie';
+//                                var startPos = response.search(/Version:/i) + 9;
+//                                fVersion = response.substr(startPos).split(/,/, 1);
+//                                console.log('Smoothieware detected (' + fVersion + ')');
+//                                // Start intervall for status queries
+//                                statusLoop = setInterval(function () {
+//                                    if (isConnected) {
+//                                        port.write('?');
+//                                    }
+//                                }, 250);
+//                            }
+//                            if (response.indexOf("ok") === 0) { // Got an OK so we are clear to send
+//                                blocked = false;
+//                                if (firmware === 'grbl') {
+//                                    grblBufferSize.shift();
+//                                }
+//                                send1Q();
+//                            }
+//                            if (response.indexOf("error") === 0) {
+//                                if (firmware === 'grbl') {
+//                                    grblBufferSize.shift();
+//                                }
+//                            }
+//                            io.sockets.emit("data", response);
+//                        }
                     });
                     break;
             }
@@ -797,6 +802,12 @@ io.sockets.on('connection', function (appSocket) {
         });
     });
 
+    appSocket.on('areWeLive', function (data) { // Report active serial port to web-client
+        if (isConnected) {
+            appSocket.emit("activePorts", port.path + ',' + port.options.baudRate);
+        }
+    });
+    
     appSocket.on('closePort', function (data) { // Close machine port and dump queue
         if (isConnected) {
             console.log(chalk.yellow('WARN:'), chalk.blue('Closing Port ' + port.path));
@@ -808,21 +819,26 @@ io.sockets.on('connection', function (appSocket) {
             clearInterval(queueCounter);
             clearInterval(statusLoop);
             port.close();
-            isConnected = false;
-            connectedTo = false;
-            paused = false;
-            blocked = false;
-            io.sockets.emit("connectStatus", 'Connect');
-            console.log(chalk.yellow('WARN:'), chalk.blue('Port closed ' + port.path));
         } else {
             io.sockets.emit("connectStatus", 'closed');
             console.log(chalk.yellow('WARN:'), chalk.blue('Port closed ' + port.path));
         }
     });
 
-    appSocket.on('areWeLive', function (data) { // Report active serial port to web-client
-        if (isConnected) {
-            appSocket.emit("activePorts", port.path + ',' + port.options.baudRate);
+    appSocket.on('closeEsp', function (data) { // Close socket connection to ESP
+        if (espConnected) {
+            console.log(chalk.yellow('WARN:'), chalk.blue('Closing ESP @ ' + espIP));
+            io.sockets.emit("connectStatus", 'closing:' + espIP);
+            espSocket.send(String.fromCharCode(0x18)); // ctrl-x
+            gcodeQueue.length = 0; // dump the queye
+            grblBufferSize.length = 0; // dump bufferSizes
+            tinygBufferSize = 4; // reset tinygBufferSize
+            clearInterval(queueCounter);
+            clearInterval(statusLoop);
+            espSocket.close();
+        } else {
+            io.sockets.emit("connectStatus", 'Connect');
+            console.log(chalk.yellow('WARN:'), chalk.blue('ESP connection closed'));
         }
     });
 
