@@ -8,7 +8,7 @@ var buffer = "";
 function initEsp8266() {
   $('#espConnectBtn').on('click', function() {
     var espIP = $('#espIp').val();
-    startWS(espIP);
+    //startWS(espIP);
   });
 
   $('#scanwifi').on('click', function(e) {

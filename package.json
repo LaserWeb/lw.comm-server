@@ -21,7 +21,8 @@
     "node-static": "*",
     "request": "*",
     "serialport": "^4.0.7",
-    "socket.io": "*"
+    "socket.io": "*",
+    "telnet-client": "*"
   },
   "license": "AGPL-3.0",
   "bugs": {

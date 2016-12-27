@@ -52,6 +52,10 @@ function initSocket() {
         }
     });
 
+    socket.on('error', function (data) {
+        console.log('Error' + data);
+    });
+
     socket.on('data', function (data) {
         $('#syncstatus').html('Socket OK');
         // isConnected = true;
@@ -114,6 +118,10 @@ function initSocket() {
         }
     });
 
+    socket.on('runningJob', function (data) {
+        console.log('runningJob' + data);
+    });
+
     socket.on('qCount', function (data) {
         data = parseInt(data);
         $('#queueCnt').html('Queued: ' + data);
@@ -147,11 +155,26 @@ function initSocket() {
     });
 
     $('#connect').on('click', function () {
+        var connectVia = $('#connectVia').val().toLowerCase();
         var portName = $('#port').val();
         var baudRate = $('#baud').val();
-        socket.emit('connectTo', portName + ',' + baudRate);
-        saveSetting("lastUsedPort", portName);
-        saveSetting("lastUsedBaud", baudRate);
+        socket.emit('connectTo', connectVia + ',' + portName + ',' + baudRate);
+        saveSetting('lastUsedPort', portName);
+        saveSetting('lastUsedBaud', baudRate);
+    });
+
+    $('#ethConnect').on('click', function () {
+        var connectVia = $('#connectVia').val().toLowerCase();
+        var smoothieIp = $('#smoothieIp').val();
+        socket.emit('connectTo', connectVia + ',' + smoothieIp);
+        saveSetting('smoothieIp', ethIP);
+    });
+
+    $('#espConnectBtn').on('click', function () {
+        var connectVia = $('#connectVia').val().toLowerCase();
+        var espIpAdress = $('#espIp').val();
+        socket.emit('connectTo', connectVia + ',' + espIpAdress);
+        saveSetting('espIpAddress', espIpAdress);
     });
 
     $('#closePort').on('click', function () {
