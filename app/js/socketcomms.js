@@ -325,26 +325,15 @@ function playpauseMachine() {
 function playGcode() {
     jobStartTime = new Date(Date.now());
     printLog("Job started at " + jobStartTime.toString(), msgcolor, "file");
-    var connectVia = $('#connectVia').val();
-    if (connectVia === "USB") {
-        if (isConnected) {
-            var g;
-            g = prepgcodefile();
-            sendGcode(g);
-            playing = true;
-            $('#playicon').removeClass('fa-play');
-            $('#playicon').addClass('fa-pause');
-        } else {
-            printLog('Not Connected', errorcolor, "usb");
-        }
-    } else if (connectVia === "Ethernet") {
-        // Upload to SD Wizard
-    } else if (connectVia === "ESP8266") {
-        // Upload to SD
+    if (isConnected) {
+        var g;
+        g = prepgcodefile();
+        socket.emit('runJob', gcode);
+        playing = true;
         $('#playicon').removeClass('fa-play');
         $('#playicon').addClass('fa-pause');
-        playing = true;
-        espPlay();
+    } else {
+        printLog('Not Connected', errorcolor, "usb");
     }
 }
 
