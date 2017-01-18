@@ -50,10 +50,10 @@ function initSocket() {
             $('#ethDisconnectBtn').show();
             $('#espConnectBtn').hide();
             $('#espDisconnectBtn').show();
-            $("#machineStatus").addClass('badge-ok')
-            $("#machineStatus").removeClass('badge-notify')
-            $("#machineStatus").removeClass('badge-warn')
-            $("#machineStatus").removeClass('badge-busy')
+            $("#machineStatus").addClass('badge-ok');
+            $("#machineStatus").removeClass('badge-notify');
+            $("#machineStatus").removeClass('badge-warn');
+            $("#machineStatus").removeClass('badge-busy');
             $('#machineStatus').html("Wifi Connected");
         }
         if (data.indexOf('Connect') >= 0) {
