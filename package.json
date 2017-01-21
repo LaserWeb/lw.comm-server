@@ -20,9 +20,10 @@
     "dotenv": "*",
     "node-static": "*",
     "request": "*",
-    "serialport": "^4.0.7",
+    "serialport": "*",
     "socket.io": "*",
-    "telnet-client": "*"
+    "telnet-client": "^0.12.3",
+    "ws": "*"
   },
   "license": "AGPL-3.0",
   "bugs": {
