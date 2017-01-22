@@ -22,7 +22,8 @@
     "request": "*",
     "serialport": "^4.0.7",
     "socket.io": "*",
-    "telnet-client": "*"
+    "telnet-client": "*",
+    "ws": "^1.1.1"
   },
   "license": "AGPL-3.0",
   "bugs": {

@@ -61,8 +61,30 @@ function initSocket() {
 
     socket.on('error', function (data) {
         console.log('Error' + data);
+        isConnected = false;
+        $('#connect').removeClass('disabled');
+        $('#closePort').addClass('disabled');
+        $('#machineStatus').html('Not Connected');
+        $("#machineStatus").removeClass('badge-ok');
+        $("#machineStatus").addClass('badge-notify');
+        $("#machineStatus").removeClass('badge-warn');
+        $("#machineStatus").removeClass('badge-busy');
+        $('#overrides').addClass('hide');
     });
 
+    socket.on('close', function() {
+        console.log('Server connection closed');
+        isConnected = false;
+        $('#connect').removeClass('disabled');
+        $('#closePort').addClass('disabled');
+        $('#machineStatus').html('Not Connected');
+        $("#machineStatus").removeClass('badge-ok');
+        $("#machineStatus").addClass('badge-notify');
+        $("#machineStatus").removeClass('badge-warn');
+        $("#machineStatus").removeClass('badge-busy');
+        $('#overrides').addClass('hide');
+    });
+              
     socket.on('data', function (data) {
         $('#syncstatus').html('Socket OK');
         // isConnected = true;
@@ -328,7 +350,7 @@ function playGcode() {
     if (isConnected) {
         var g;
         g = prepgcodefile();
-        socket.emit('runJob', gcode);
+        socket.emit('runJob', g);
         playing = true;
         $('#playicon').removeClass('fa-play');
         $('#playicon').addClass('fa-pause');
@@ -516,4 +538,12 @@ function laserTest(power, duration) {
 // 2 = clear quue, clear alarm state, and wait for new queue
 function clearQueueAlarm(value) {
     socket.emit('clearAlarm', value);
+}
+
+function jog(dir, dist, feed = null) {
+    if (feed) {
+        socket.emit(dir + ',' + dist + ',' + feed);
+    } esle {
+        socket.emit(dir + ',' + dist);        
+    }
 }

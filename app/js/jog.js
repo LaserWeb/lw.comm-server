@@ -218,7 +218,8 @@ function initJog() {
        var dist = $('input[name=stp]:checked', '#stepsize').val();
        var feedrate = $('#jogfeedxy').val() * 60;
        console.log('Jog Distance', dist);
-       sendGcode('G91\nG0 F'+ feedrate +' X'+ dist + '\nG90\n');
+       //sendGcode('G91\nG0 F'+ feedrate +' X'+ dist + '\nG90\n');
+       jog('X', dist, feedrate);
      }
   });
 
@@ -227,7 +228,8 @@ function initJog() {
        var dist = $('input[name=stp]:checked', '#stepsize').val();
        var feedrate = $('#jogfeedxy').val() * 60;
        console.log('Jog Distance', dist);
-       sendGcode('G91\nG0 F'+ feedrate +' Y'+ dist + '\nG90\n');
+       //sendGcode('G91\nG0 F'+ feedrate +' Y'+ dist + '\nG90\n');
+       jog('Y', dist, feedrate);
      }
   });
 
@@ -236,7 +238,8 @@ function initJog() {
        var dist = $('input[name=stp]:checked', '#stepsize').val();
        var feedrate = $('#jogfeedz').val() * 60;
        console.log('Jog Distance', dist);
-       sendGcode('G91\nG0 F'+ feedrate +' Z'+ dist + '\nG90\n');
+       //sendGcode('G91\nG0 F'+ feedrate +' Z'+ dist + '\nG90\n');
+       jog('Z', dist, feedrate);
      }
   });
 
@@ -245,7 +248,8 @@ function initJog() {
        var dist = $('input[name=stp]:checked', '#stepsize').val();
        var feedrate = $('#jogfeedxy').val() * 60;
        console.log('Jog Distance', dist);
-       sendGcode('G91\nG0 F'+ feedrate +' X-'+ dist + '\nG90\n');
+       //sendGcode('G91\nG0 F'+ feedrate +' X-'+ dist + '\nG90\n');
+       jog('X', '-' + dist, feedrate);
      }
   });
 
@@ -254,7 +258,8 @@ function initJog() {
        var dist = $('input[name=stp]:checked', '#stepsize').val();
        var feedrate = $('#jogfeedxy').val() * 60;
        console.log('Jog Distance', dist);
-       sendGcode('G91\nG0 F'+ feedrate +' Y-'+ dist + '\nG90\n');
+       //sendGcode('G91\nG0 F'+ feedrate +' Y-'+ dist + '\nG90\n');
+       jog('Y', '-' + dist, feedrate);
      }
   });
 
@@ -263,7 +268,8 @@ function initJog() {
        var dist = $('input[name=stp]:checked', '#stepsize').val();
        var feedrate = $('#jogfeedz').val() * 60;
        console.log('Jog Distance', dist);
-       sendGcode('G91\nG0 F'+ feedrate +' Z-'+ dist + '\nG90\n');
+       //sendGcode('G91\nG0 F'+ feedrate +' Z-'+ dist + '\nG90\n');
+       jog('Z', '-' + dist, feedrate);
      }
   });
 
