@@ -223,6 +223,10 @@ Rasterizer.prototype.rasterRow = function(y) {
     // Offset Y since Gcode runs from bottom left and paper.js runs from top left
     var gcodey = (this.config.imgheight * this.config.spotSize1) - posy;
     gcodey = gcodey.toFixed(3);
+    while (gcodey.slice(-1) === '0') {
+      // delete unneeded decimals
+      gcodey = gcodey.substr(0, gcodey.length - 1);
+    }
     this.result += 'G0 Y{0}\n'.format(gcodey);
 
     // Clear grayscale values on each line change
@@ -279,7 +283,11 @@ Rasterizer.prototype.rasterRow = function(y) {
             this.moveCount++;
 
             //console.log('From: ' + this.lastPosx + ', ' + lastPosy + '  - To: ' + posx + ', ' + posy + ' at ' + lastIntensity + '%');
-            if (lastIntensity > 0.05) {
+            while (posx.slice(-1) === '0') {
+              // delete unneeded decimals
+              posx = posx.substr(0, posx.length - 1);
+            }
+           if (lastIntensity > 0.05) {
               if (!isLaserOn) {
                 if (laseron) {
                     this.result += laseron
@@ -308,7 +316,7 @@ Rasterizer.prototype.rasterRow = function(y) {
                   }
                   isLaserOn = false;
                 }
-                this.result += 'G0 X{0} S0\n'.format(posx, gcodey);
+                this.result += 'G1 X{0} S0\n'.format(posx, gcodey);
 
               }
             }

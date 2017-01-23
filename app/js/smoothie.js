@@ -28,8 +28,10 @@ function initSmoothie() {
       $('#espConnect').hide();
       $('#usbConnect').hide();
       $('#ethernetConnect').show();
-      $('#playBtn').hide();
-      $('#uploadBtn').show();
+      //$('#playBtn').hide();
+      //$('#uploadBtn').show();
+      $('#playBtn').show();
+      $('#uploadBtn').hide();
     } else if (connectVia == "ESP8266") {
       connectMode = "ESP8266";
       $('#espConnect').show();
@@ -57,6 +59,7 @@ function initSmoothie() {
   $('#ethConnect').on('click', function() {
     var smoothieIp = $('#smoothieIp').val();
     saveSetting('smoothieIp', smoothieIp);
+    saveSetting('lastUsedType', 'Telnet');
     $.ajax({
      type: 'GET',
         url: 'http://' +smoothieIp + '/',
@@ -201,12 +204,12 @@ function getTemperature() {
       var tool = result[1];
       var value = result[3];
       if (tool == "T") {
-        //$("#heat_actual_t0").html(value + "&deg;C");
+        //$("#heat_actual_t0").html(value + "°C");
       } else if (tool == "T1") {
-        //$("#heat_actual_t1").html(value + "&deg;C");
+        //$("#heat_actual_t1").html(value + "°C");
       }
       if (tool == "B") {
-        //$("#heat_actual_bed").html(value + "&deg;C");
+        //$("#heat_actual_bed").html(value + "°C");
       }
     }
   });

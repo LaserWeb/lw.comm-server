@@ -3,14 +3,24 @@ var socket, isConnected, connectVia;
 var jobStartTime = -1;
 var playing = false;
 var paused = false;
+var queueEmptyCount = 0;
 var laserTestOn = false;
 var firmware;
 var ovStep = 1;
 var ovLoop;
+var server = '';    //192.168.14.100';
 
 function initSocket() {
-    socket = io.connect(''); // socket.io init
+    socket = io.connect(server); // socket.io init
     socket.emit('firstLoad', 1);
+
+    socket.on('config', function (data) {
+        console.log('config: ' + data);
+    });
+
+    socket.on('activePorts', function (data) {
+        console.log('activePorts: ' + data);
+    });
 
     socket.on('ports', function (data) {
         $('#syncstatus').html('Socket Init');
@@ -20,36 +30,40 @@ function initSocket() {
         }
         $('#connect').removeClass('disabled');
         // Might as well pre-select the last-used port and buffer
+        var lastConn = loadSetting("lastUsedConn");
         var lastUsed = loadSetting("lastUsedPort");
         var lastBaud = loadSetting("lastUsedBaud");
+        $("#connectVia option:contains(" + lastConn + ")").attr('selected', 'selected');
         $("#port option:contains(" + lastUsed + ")").attr('selected', 'selected');
         $("#baud option:contains(" + lastBaud + ")").attr('selected', 'selected');
     });
 
-    socket.on('activePorts', function (data) {
-        console.log('activePorts' + data);
-    });
-
     socket.on('connectStatus', function (data) {
-        console.log(data);
+        console.log('connectStatus: ' + data);
         $('#connectStatus').html(data);
         $('#syncstatus').html('Socket OK');
         if (data.indexOf('opened') >= 0) {
             isConnected = true;
             $('#connect').addClass('disabled');
             $('#closePort').removeClass('disabled');
+            $('#ethConnectBtn').hide();
+            $('#ethDisconnectBtn').show();
             $('#espConnectBtn').hide();
             $('#espDisconnectBtn').show();
-            $("#machineStatus").addClass('badge-ok')
-            $("#machineStatus").removeClass('badge-notify')
-            $("#machineStatus").removeClass('badge-warn')
-            $("#machineStatus").removeClass('badge-busy')
+            $("#machineStatus").addClass('badge-ok');
+            $("#machineStatus").removeClass('badge-notify');
+            $("#machineStatus").removeClass('badge-warn');
+            $("#machineStatus").removeClass('badge-busy');
             $('#machineStatus').html("Wifi Connected");
         }
         if (data.indexOf('Connect') >= 0) {
             isConnected = false;
             $('#connect').removeClass('disabled');
             $('#closePort').addClass('disabled');
+            $('#ethConnectBtn').show();
+            $('#ethDisconnectBtn').hide();
+            $('#espConnectBtn').show();
+            $('#espDisconnectBtn').hide();
             $('#machineStatus').html('Not Connected');
             $("#machineStatus").removeClass('badge-ok');
             $("#machineStatus").addClass('badge-notify');
@@ -126,6 +140,19 @@ function initSocket() {
         }
     });
 
+    socket.on('wpos', function (wpos) {
+        var pos = wpos.split(',');
+        var xpos = parseFloat(pos[0]).toFixed(2);
+        var ypos = parseFloat(pos[1]).toFixed(2);
+        var zpos = parseFloat(pos[2]).toFixed(2);
+        $('#mX').html(xpos);
+        $('#mY').html(ypos);
+        $('#mZ').html(zpos);
+        if (bullseye) {
+            setBullseyePosition(pos[0], pos[1], pos[2]); // Also updates #mX #mY #mZ
+        }
+    });
+    
     // smoothie feed override report (from server)
     socket.on('feedOverride', function (data) {
         $('#oF').html(data.toString() + '<span class="drounitlabel"> %</span>');
@@ -148,30 +175,34 @@ function initSocket() {
     });
 
     socket.on('runningJob', function (data) {
-        console.log('runningJob' + data);
+        //console.log('runningJob' + data);
     });
 
     socket.on('qCount', function (data) {
         data = parseInt(data);
         $('#queueCnt').html('Queued: ' + data);
-        if (data < 1) {
-            $('#playicon').removeClass('fa-pause');
-            $('#playicon').addClass('fa-play');
-            playing = false;
-            paused = false;
-            if (jobStartTime >= 0) {
-                var jobFinishTime = new Date(Date.now());
-                var elapsedTimeMS = jobFinishTime.getTime() - jobStartTime.getTime();
-                var elapsedTime = Math.round(elapsedTimeMS / 1000);
-                printLog("Job started at " + jobStartTime.toString(), msgcolor, "file");
-                printLog("Job finished at " + jobFinishTime.toString(), msgcolor, "file");
-                printLog("Elapsed time: " + elapsedTime + " seconds.", msgcolor, "file");
-                jobStartTime = -1;
+        if (data === 0) {
+            queueEmptyCount++;
+            if (queueEmptyCount == 4) {
+                playing = false;
+                paused = false;
+                $('#playicon').removeClass('fa-pause');
+                $('#playicon').addClass('fa-play');
+                
+                if (jobStartTime >= 0) {
+                    var jobFinishTime = new Date(Date.now());
+                    var elapsedTimeMS = jobFinishTime.getTime() - jobStartTime.getTime();
+                    var elapsedTime = Math.round(elapsedTimeMS / 1000);
+                    printLog("Job started at " + jobStartTime.toString(), msgcolor, "file");
+                    printLog("Job finished at " + jobFinishTime.toString(), msgcolor, "file");
+                    printLog("Elapsed time: " + elapsedTime + " seconds.", msgcolor, "file");
+                    jobStartTime = -1;
 
-                // Update accumulated job time
-                var accumulatedJobTimeMS = accumulateTime(elapsedTimeMS);
+                    // Update accumulated job time
+                    var accumulatedJobTimeMS = accumulateTime(elapsedTimeMS);
 
-                printLog("Total accumulated job time: " + (accumulatedJobTimeMS / 1000).toHHMMSS());
+                    printLog("Total accumulated job time: " + (accumulatedJobTimeMS / 1000).toHHMMSS());
+                }
             }
         }
     });
@@ -188,30 +219,36 @@ function initSocket() {
         var portName = $('#port').val();
         var baudRate = $('#baud').val();
         socket.emit('connectTo', connectVia + ',' + portName + ',' + baudRate);
+        saveSetting('lastUsedConn', connectVia);
         saveSetting('lastUsedPort', portName);
         saveSetting('lastUsedBaud', baudRate);
     });
 
-    $('#ethConnect').on('click', function () {
+    $('#ethConnectBtn').on('click', function () {
         var connectVia = $('#connectVia').val().toLowerCase();
         var smoothieIp = $('#smoothieIp').val();
-        socket.emit('connectTo', connectVia + ',' + smoothieIp);
-        saveSetting('smoothieIp', ethIP);
+        socket.emit('connectTo', 'telnet' + ',' + smoothieIp);
+        saveSetting('lastUsedConn', connectVia);
+        saveSetting('smoothieIp', smoothieIp);
     });
 
     $('#espConnectBtn').on('click', function () {
         var connectVia = $('#connectVia').val().toLowerCase();
-        var espIpAdress = $('#espIp').val();
-        socket.emit('connectTo', connectVia + ',' + espIpAdress);
-        saveSetting('espIpAddress', espIpAdress);
+        var espIp = $('#espIp').val();
+        socket.emit('connectTo', connectVia + ',' + espIp);
+        saveSetting('lastUsedConn', connectVia);
+        saveSetting('espIpAddress', espIp);
     });
 
     $('#closePort').on('click', function () {
         socket.emit('closePort', 1);
     });
 
+    $('#ethDisconnectBtn').on('click', function(e) {
+        socket.emit('closeTelnet', 1);
+    });
+
     $('#espDisconnectBtn').on('click', function(e) {
-        e.preventDefault();
         socket.emit('closeEsp', 1);
     });
 
@@ -227,56 +264,16 @@ function sendGcode(gcode) {
     // printLog("<i class='fa fa-arrow-right' aria-hidden='true'></i>"+ gcode, msgcolor)
     if (gcode) {
         // console.log('Sending', gcode)
-        var connectVia = $('#connectVia').val();
-        if (connectVia === "USB") {
-            socket.emit('serialSend', gcode);
-        } else if (connectVia === "Ethernet") {
-            runCommand(gcode);
-        } else if (connectVia === "ESP8266") {
-            if (ws) {
-                if (ws.readyState == '1') {
-                    ws.send(gcode);
-                } else {
-                    printLog("Unable to send gcode: Not connected to Websocket: " + gcode, errorcolor, "wifi");
-                }
-            } else {
-                printLog("Unable to send gcode: Not connected: " + gcode, errorcolor, "wifi");
-            }
-        }
+        socket.emit('runCommand', gcode);
     }
 }
 
 function stopMachine() {
     var laseroffcmd = document.getElementById('laseroff').value;
-    var connectVia = $('#connectVia').val();
-    if (connectVia === "USB") {
-        if (laseroffcmd) {
-            socket.emit('stop', laseroffcmd);
-        } else {
-            socket.emit('stop', 0);
-        }
-    } else if (connectVia === "Ethernet") {
-        if (laseroffcmd) {
-            runCommand('abort');
-            runCommand(laseroffcmd);
-            runCommand('\030');
-            runCommand('$X');
-            runCommand(laseroffcmd);
-        } else {
-            runCommand('abort');
-            runCommand('\030');
-        }
-    } else if (connectVia === "ESP8266") {
-        if (laseroffcmd) {
-            gcodeQueue = [];
-            sendGcode(laseroffcmd);
-            sendGcode('abort');
-            sendGcode(laseroffcmd);
-        } else {
-            gcodeQueue = [];
-            sendGcode('abort');
-        }
-        $('#queueCnt').html('Queued: ' + gcodeQueue.length);
+    if (laseroffcmd) {
+        socket.emit('stop', laseroffcmd);
+    } else {
+        socket.emit('stop', 0);
     }
     $('#playicon').addClass('fa-play');
     $('#playicon').removeClass('fa-pause');
@@ -285,24 +282,14 @@ function stopMachine() {
 
 function playpauseMachine() {
     if (isConnected) {
-        var connectVia = $('#connectVia').val();
         if (playing === true) {
             if (paused === true) {
                 // unpause
-                // sendGcode('~');
                 var laseroncmd = document.getElementById('laseron').value;
                 if (laseroncmd.length === 0) {
                     laseroncmd = 0;
                 }
-                if (connectVia === "USB") {
-                    socket.emit('unpause', laseroncmd);
-                } else if (connectVia === "Ethernet") {
-                    runCommand('resume');
-                } else if (connectVia === "ESP8266") {
-                    // Do nothing.  The paused var starts the uploadLine function
-                    paused = false;
-                    uploadLine();
-                }
+                socket.emit('resume', laseroncmd);
                 paused = false;
                 $('#playicon').removeClass('fa-play');
                 $('#playicon').addClass('fa-pause');
@@ -313,23 +300,7 @@ function playpauseMachine() {
                 if (laseroffcmd.length === 0) {
                     laseroffcmd = 0;
                 }
-                if (connectVia === "USB") {
-                    socket.emit('pause', laseroffcmd);
-                } else if (connectVia === "Ethernet") {
-                    if (laseroffcmd !== 0) {
-                        runCommand('suspend');
-                        runCommand(laseroffcmd);
-                    } else {
-                        runCommand('pause');
-                    }
-                } else if (connectVia === "ESP8266") {
-                    if (laseroffcmd !== 0) {
-                        sendGcode("suspend");
-                        sendGcode(laseroffcmd);
-                    } else {
-                        // Do nothing.  The paused var stops the uploadLine function
-                    }
-                }
+                socket.emit('pause', laseroffcmd);
                 paused = true;
                 $('#playicon').removeClass('fa-pause');
                 $('#playicon').addClass('fa-play');
@@ -366,7 +337,7 @@ var lastPosx = 0,
 
 function updateStatusTinyG(data) {
     var jsObject = JSON.parse(data);
-    console.log(jsObject)
+    //console.log(jsObject)
     if (jsObject.sr.posx) {
         lastPosx = jsObject.sr.posx
     }
@@ -465,7 +436,7 @@ function updateStatus(data) {
     }
 
     // Extract override values (for Grbl > v1.1 only!)
-    startOv = data.search(/ov:/i) + 3;
+    var startOv = data.search(/ov:/i) + 3;
     if (startOv > 3) {
         var ov = data.replace('>', '').substr(startOv).split(/,|\|/, 3);
         //printLog("Overrides: " + ov[0] + ',' + ov[1] + ',' + ov[2],  msgcolor, "USB");
@@ -495,20 +466,13 @@ function updateStatus(data) {
 
 function override(param, value) {
     if (isConnected) {
-        var connectVia = $('#connectVia').val();
-        if (connectVia === "USB") {
-            switch (param) {
-                case 'F':
-                    socket.emit('feedOverride', value);
-                    break;
-                case 'S':
-                    socket.emit('spindleOverride', value);
-                    break;
-            }
-        } else if (connectVia === "Ethernet") {
-            runCommand(value);
-        } else if (connectVia === "ESP8266") {
-            // needs to be programmed
+        switch (param) {
+            case 'F':
+                socket.emit('feedOverride', value);
+                break;
+            case 'S':
+                socket.emit('spindleOverride', value);
+                break;
         }
     } else {
         printLog('You have to Connect to a machine First!', errorcolor, "usb");
@@ -517,17 +481,10 @@ function override(param, value) {
 
 function laserTest(power, duration) {
     if (isConnected) {
-        var connectVia = $('#connectVia').val();
-        if (connectVia === "USB") {
-            if (!power || !duration) {
-                printLog('You must setup "LaserTest Power" and "LaserTest Duratuion" first!', errorcolor, "usb");
-            } else {
-                socket.emit('laserTest', power + ',' + duration);
-            }
-        } else if (connectVia === "Ethernet") {
-            // needs to be programmed
-        } else if (connectVia === "ESP8266") {
-            // needs to be programmed
+        if (!power || !duration) {
+            printLog('You must setup "LaserTest Power" and "LaserTest Duratuion" first!', errorcolor, "usb");
+        } else {
+            socket.emit('laserTest', power + ',' + duration);
         }
     } else {
         printLog('You have to Connect to a machine First!', errorcolor, "usb");
