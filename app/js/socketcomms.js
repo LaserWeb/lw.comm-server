@@ -500,7 +500,7 @@ function clearQueueAlarm(value) {
 function jog(dir, dist, feed = null) {
     if (feed) {
         socket.emit(dir + ',' + dist + ',' + feed);
-    } esle {
+    } else {
         socket.emit(dir + ',' + dist);        
     }
 }
