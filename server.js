@@ -468,30 +468,30 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }, 250);
                             }
-//                        } else if (data.indexOf('ALARM') === 0) {
-//                            writeLog('Emptying Queue', 1);
-//                            gcodeQueue.length = 0; // dump the queye
-//                            grblBufferSize.length = 0; // dump bufferSizes
-//                            tinygBufferSize = TINYG_RX_BUFFER_SIZE;
-//                            writeLog('Clearing Lockout', 1);
-//                            switch (firmware) {
-//                                case 'grbl':
-//                                    machineSend('$X\n');
-//                                    blocked = false;
-//                                    paused = false;
-//                                    break;
-//                                case 'smoothie':
-//                                    machineSend('$X\n'); //M999
-//                                    blocked = false;
-//                                    paused = false;
-//                                    break;
-//                                case 'tinyg':
-//                                    machineSend('%'); // flush tinyg quere
-//                                    machineSend('~'); // resume
-//                                    blocked = false;
-//                                    paused = false;
-//                                    break;
-//                            }
+                        } else if (data.indexOf('ALARM') === 0) {
+                            writeLog('Emptying Queue', 1);
+                            gcodeQueue.length = 0; // dump the queye
+                            grblBufferSize.length = 0; // dump bufferSizes
+                            tinygBufferSize = TINYG_RX_BUFFER_SIZE;
+                            writeLog('Clearing Lockout', 1);
+                            switch (firmware) {
+                                case 'grbl':
+                                    machineSend('$X\n');
+                                    blocked = false;
+                                    paused = false;
+                                    break;
+                                case 'smoothie':
+                                    machineSend('$X\n'); //M999
+                                    blocked = false;
+                                    paused = false;
+                                    break;
+                                case 'tinyg':
+                                    machineSend('%'); // flush tinyg quere
+                                    machineSend('~'); // resume
+                                    blocked = false;
+                                    paused = false;
+                                    break;
+                            }
                         } else if (data.indexOf('error') === 0) {
                             if (firmware === 'grbl') {
                                 grblBufferSize.shift();
@@ -761,22 +761,20 @@ io.sockets.on('connection', function (appSocket) {
                             newMode = 'G3';
                         } else if (tosend.indexOf('X') === 0) {
                             tosend = tosend.replace(/\s+/g, '');
-                            newMode = lastMode;
                         } else if (tosend.indexOf('Y') === 0) {
                             tosend = tosend.replace(/\s+/g, '');
-                            newMode = lastMode;
                         } else if (tosend.indexOf('Z') === 0) {
                             tosend = tosend.replace(/\s+/g, '');
-                            newMode = lastMode;
-                        } else {
-                            newMode = '';
+                        }
+                        if (newMode) {
+                            if (newMode === lastMode) {
+                                tosend.substr(2);
+                            } else {
+                                lastMode = newMode;
+                            }
                         }
                         //console.log(line);
-                        if (newMode.length > 0 && newMode === lastMode) {
-                            tosend = tosend.substr(2);
-                        }
                         addQ(tosend);
-                        lastMode = newMode;
                     }
                 }
                 if (i > 0) {
