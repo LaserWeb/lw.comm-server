@@ -5,7 +5,8 @@ var playing = false;
 var paused = false;
 var queueEmptyCount = 0;
 var laserTestOn = false;
-var firmware;
+var firmware, fVersion, fDate;
+var gotWPos = false;
 var ovStep = 1;
 var ovLoop;
 var server = '';    //192.168.14.100';
@@ -14,14 +15,18 @@ function initSocket() {
     socket = io.connect(server); // socket.io init
     socket.emit('firstLoad', 1);
 
-    socket.on('config', function (data) {
-        console.log('config: ' + data);
+    socket.on('serverConfig', function (data) {
+        console.log('serverConfig: ' + data);
     });
 
-    socket.on('activePorts', function (data) {
-        console.log('activePorts: ' + data);
+    socket.on('interfaces', function (data) {
+        console.log('interfaces: ' + data);
     });
 
+    socket.on('activeInterface', function (data) {
+        console.log('activeInterface: ' + data);
+    });
+    
     socket.on('ports', function (data) {
         $('#syncstatus').html('Socket Init');
         var options = $("#port");
@@ -36,6 +41,18 @@ function initSocket() {
         $("#connectVia option:contains(" + lastConn + ")").attr('selected', 'selected');
         $("#port option:contains(" + lastUsed + ")").attr('selected', 'selected');
         $("#baud option:contains(" + lastBaud + ")").attr('selected', 'selected');
+    });
+
+    socket.on('activePort', function (data) {
+        console.log('activePort: ' + data);
+    });
+
+    socket.on('activeBaudRate', function (data) {
+        console.log('activeBaudRate: ' + data);
+    });
+
+    socket.on('activeIP', function (data) {
+        console.log('activeIP: ' + data);
     });
 
     socket.on('connectStatus', function (data) {
@@ -54,9 +71,8 @@ function initSocket() {
             $("#machineStatus").removeClass('badge-notify');
             $("#machineStatus").removeClass('badge-warn');
             $("#machineStatus").removeClass('badge-busy');
-            $('#machineStatus').html("Wifi Connected");
-        }
-        if (data.indexOf('Connect') >= 0) {
+            $('#machineStatus').html("Idle");
+        } else if (data.indexOf('Connect') >= 0) {
             isConnected = false;
             $('#connect').removeClass('disabled');
             $('#closePort').addClass('disabled');
@@ -86,6 +102,50 @@ function initSocket() {
         $('#overrides').addClass('hide');
     });
 
+    socket.on('firmware', function (data) {
+        console.log('firmware: ' + data);
+        data = data.split(',');
+        firmware = data[0];
+        fVersion = data[1];
+        fdate = data[2];
+        switch (firmware) {
+            case 'grbl':
+                if (fVersion >= '1.1e') { //is Grbl >= v1.1
+                    $('#overrides').removeClass('hide');
+                    $('#motorsOff').hide();
+                    $('homeX').hide();
+                    $('homeY').hide();
+                    $('homeZ').hide();
+                } else {
+                    socket.emit('closePort', 1);
+                    isConnected = false;
+                    $('#closePort').addClass('disabled');
+                    $('#machineStatus').html('Not Connected');
+                    $("#machineStatus").removeClass('badge-ok');
+                    $("#machineStatus").addClass('badge-notify');
+                    $("#machineStatus").removeClass('badge-warn');
+                    $("#machineStatus").removeClass('badge-busy');
+                    $('#overrides').addClass('hide');
+                    printLog("<b><u>You need to update GRBL firmware to the latest version (min. 1.1e)!</u></b> (see <a href=\"https://github.com/LaserWeb/LaserWeb3/wiki/Firmware:-GRBL-1.1d\">Wiki</a> for details)", errorcolor, "usb");
+                }
+                break;
+            case 'smoothie':
+                $('#overrides').removeClass('hide');
+                $('#motorsOff').show();
+                $('homeX').show();
+                $('homeY').show();
+                $('homeZ').show();
+                break;
+            case 'tinyg':
+                $('#overrides').addClass('hide');
+                $('#motorsOff').hide();
+                $('homeX').hide();
+                $('homeY').hide();
+                $('homeZ').hide();
+                break;
+        }
+    });
+
     socket.on('close', function() {
         console.log('Server connection closed');
         isConnected = false;
@@ -97,6 +157,7 @@ function initSocket() {
         $("#machineStatus").removeClass('badge-warn');
         $("#machineStatus").removeClass('badge-busy');
         $('#overrides').addClass('hide');
+        gotWPos = false;
     });
               
     socket.on('data', function (data) {
@@ -111,7 +172,7 @@ function initSocket() {
         } else {
             printLog(data, msgcolor, "usb");
         }
-        if (data.indexOf('LPC176')) { //LPC1768 or LPC1769 should be Smoothie
+/*        if (data.indexOf('LPC176')) { //LPC1768 or LPC1769 should be Smoothie
             $('#overrides').removeClass('hide');
             $('#motorsOff').show();
             $('homeX').show();
@@ -138,29 +199,37 @@ function initSocket() {
                 printLog("<b><u>You need to update GRBL firmware to the latest version (min. 1.1e)!</u></b> (see <a href=\"https://github.com/LaserWeb/LaserWeb3/wiki/Firmware:-GRBL-1.1d\">Wiki</a> for details)", errorcolor, "usb");
             }
         }
-    });
-
-    socket.on('wpos', function (wpos) {
-        var pos = wpos.split(',');
-        var xpos = parseFloat(pos[0]).toFixed(2);
-        var ypos = parseFloat(pos[1]).toFixed(2);
-        var zpos = parseFloat(pos[2]).toFixed(2);
-        $('#mX').html(xpos);
-        $('#mY').html(ypos);
-        $('#mZ').html(zpos);
-        if (bullseye) {
-            setBullseyePosition(pos[0], pos[1], pos[2]); // Also updates #mX #mY #mZ
-        }
-    });
+*/    });
     
-    // smoothie feed override report (from server)
+    // feed override report (from server)
     socket.on('feedOverride', function (data) {
         $('#oF').html(data.toString() + '<span class="drounitlabel"> %</span>');
     });
 
-    // smoothie spindle override report (from server)
+    // rapid override report (from server)
+    socket.on('rapidOverride', function (data) {
+        //$('#rS').html(data.toString() + '<span class="drounitlabel"> %</span>');
+    });
+
+    // spindle override report (from server)
     socket.on('spindleOverride', function (data) {
         $('#oS').html(data.toString() + '<span class="drounitlabel"> %</span>');
+    });
+    
+    // real feed report (from server)
+    socket.on('realFeed', function (data) {
+        //$('#mF').html(fs[0].trim());
+    });
+    
+    // real spindle report (from server)
+    socket.on('realSpindle', function (data) {
+        //$('#mS').html(fs[1].trim());
+        if (laserTestOn === true) {
+            if (parseInt(data) === 0) {
+                laserTestOn = false;
+                $('#lT').removeClass('btn-highlight');
+            }
+        }
     });
 
     // laserTest state
@@ -168,16 +237,94 @@ function initSocket() {
         if (data >= 1){
             laserTestOn = true;
             $("#lT").addClass('btn-highlight');
-        } else if (data === 0) {
+        } else if (data == 0) {
             laserTestOn = false;
             $('#lT').removeClass('btn-highlight');
         }
     });
 
-    socket.on('runningJob', function (data) {
-        //console.log('runningJob' + data);
+    socket.on('runStatus', function (data) {
+        switch (data) {
+            case 'Alarm':
+                $("#machineStatus").removeClass('badge-ok');
+                $("#machineStatus").addClass('badge-notify');
+                $("#machineStatus").removeClass('badge-warn');
+                $("#machineStatus").removeClass('badge-busy');
+                if ($('#alarmmodal').is(':visible')) {
+                    // Nothing, its already open
+                } else {
+                    $('#alarmmodal').modal('show');
+                }
+                break;
+            case 'Home':
+                $("#machineStatus").removeClass('badge-ok');
+                $("#machineStatus").removeClass('badge-notify');
+                $("#machineStatus").removeClass('badge-warn');
+                $("#machineStatus").addClass('badge-busy');
+                if ($('#alarmmodal').is(':visible')) {
+                    $('#alarmmodal').modal('hide');
+                }
+                break;
+            case 'Hold':
+                $("#machineStatus").removeClass('badge-ok');
+                $("#machineStatus").removeClass('badge-notify');
+                $("#machineStatus").addClass('badge-warn');
+                $("#machineStatus").removeClass('badge-busy');
+                if ($('#alarmmodal').is(':visible')) {
+                    $('#alarmmodal').modal('hide');
+                }
+                break;
+            case 'Idle':
+                $("#machineStatus").addClass('badge-ok');
+                $("#machineStatus").removeClass('badge-notify');
+                $("#machineStatus").removeClass('badge-warn');
+                $("#machineStatus").removeClass('badge-busy');
+                if ($('#alarmmodal').is(':visible')) {
+                    $('#alarmmodal').modal('hide');
+                }
+                break;
+            case 'Run':
+                $("#machineStatus").removeClass('badge-ok');
+                $("#machineStatus").removeClass('badge-notify');
+                $("#machineStatus").removeClass('badge-warn');
+                $("#machineStatus").addClass('badge-busy');
+                if ($('#alarmmodal').is(':visible')) {
+                    $('#alarmmodal').modal('hide');
+                }
+                break;
+        }
+        $('#machineStatus').html(data);
     });
 
+    socket.on('wPos', function (data) {
+        gotWPos = true;
+        data = data.split(',');
+        var xPos = parseFloat(data[0]).toFixed(4);
+        var yPos = parseFloat(data[1]).toFixed(4);
+        var zPos = parseFloat(data[2]).toFixed(4);
+        $('#mX').html(xPos);
+        $('#mY').html(yPos);
+        $('#mZ').html(zPos);
+        if (bullseye) {
+            setBullseyePosition(xPos, yPos, zPos); // Also updates #mX #mY #mZ
+        }
+    });
+
+    socket.on('mPos', function (data) {
+        if (gotWPos != true) {
+            data = data.split(',');
+            var xPos = parseFloat(data[0]).toFixed(4);
+            var yPos = parseFloat(data[1]).toFixed(4);
+            var zPos = parseFloat(data[2]).toFixed(4);
+            $('#mX').html(xPos);
+            $('#mY').html(yPos);
+            $('#mZ').html(zPos);
+            if (bullseye) {
+                setBullseyePosition(xPos, yPos, zPos); // Also updates #mX #mY #mZ
+            }
+        }
+    });
+              
     socket.on('qCount', function (data) {
         data = parseInt(data);
         $('#queueCnt').html('Queued: ' + data);
@@ -210,7 +357,7 @@ function initSocket() {
 
     $('#refreshPort').on('click', function () {
         $('#port').find('option').remove().end();
-        socket.emit('refreshPorts', 1);
+        socket.emit('getPorts', 1);
         $('#syncstatus').html('Socket Refreshed');
     });
 
@@ -245,11 +392,11 @@ function initSocket() {
     });
 
     $('#ethDisconnectBtn').on('click', function(e) {
-        socket.emit('closeTelnet', 1);
+        socket.emit('closePort', 1);
     });
 
     $('#espDisconnectBtn').on('click', function(e) {
-        socket.emit('closeEsp', 1);
+        socket.emit('closePort', 1);
     });
 
     $('#sendCommand').on('click', function () {
@@ -319,9 +466,9 @@ function playGcode() {
     jobStartTime = new Date(Date.now());
     printLog("Job started at " + jobStartTime.toString(), msgcolor, "file");
     if (isConnected) {
-        var g;
-        g = prepgcodefile();
-        socket.emit('runJob', g);
+        var gcode;
+        gcode = prepgcodefile();
+        socket.emit('runJob', gcode);
         playing = true;
         $('#playicon').removeClass('fa-play');
         $('#playicon').addClass('fa-pause');
@@ -336,7 +483,7 @@ var lastPosx = 0,
     lastPosz = 0;
 
 function updateStatusTinyG(data) {
-    var jsObject = JSON.parse(data);
+/*    var jsObject = JSON.parse(data);
     //console.log(jsObject)
     if (jsObject.sr.posx) {
         lastPosx = jsObject.sr.posx
@@ -357,6 +504,7 @@ function updateStatusTinyG(data) {
     if (bullseye) {
         setBullseyePosition(xpos, ypos, zpos); // Also updates #mX #mY #mZ
     }
+*/
 }
 
 function updateStatus(data) {
@@ -365,7 +513,7 @@ function updateStatus(data) {
     // since GRBL v1.1: <Idle|WPos:0.000,0.000,0.000|Bf:15,128|FS:0,0|Pn:S|WCO:0.000,0.000,0.000> (when $10=2)
 
     // Extract state
-    var state = data.substring(data.indexOf('<') + 1, data.search(/(,|\|)/));
+/*    var state = data.substring(data.indexOf('<') + 1, data.search(/(,|\|)/));
     if (state === 'Alarm') {
         $("#machineStatus").removeClass('badge-ok');
         $("#machineStatus").addClass('badge-notify');
@@ -462,6 +610,7 @@ function updateStatus(data) {
             }
         }
     }
+*/
 }
 
 function override(param, value) {
@@ -491,16 +640,16 @@ function laserTest(power, duration) {
     }
 }
 
+function jog(dir, dist, feed = null) {
+    if (feed) {
+        socket.emit('jog', dir + ',' + dist + ',' + feed);
+    } else {
+        socket.emit('jog', dir + ',' + dist);        
+    }
+}
+
 // 1 = clear alarm state and resume queueCnt
 // 2 = clear quue, clear alarm state, and wait for new queue
 function clearQueueAlarm(value) {
     socket.emit('clearAlarm', value);
-}
-
-function jog(dir, dist, feed = null) {
-    if (feed) {
-        socket.emit(dir + ',' + dist + ',' + feed);
-    } else {
-        socket.emit(dir + ',' + dist);        
-    }
 }

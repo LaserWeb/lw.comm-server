@@ -1387,8 +1387,7 @@ function send1Q() {
                         // Send the buffer
                         blocked = true;
                         machineSend(gcodeLine + '\n');
-                        //writeLog('Sent: ' + gcodeLine + ' Q: ' + (queueLen - queuePointer), 1);
-                        
+                        writeLog('Sent: ' + gcodeLine + ' Q: ' + (queueLen - queuePointer), 2);
                     }
                 } else {
                     if ((gcodeQueue.length  - queuePointer) > 0 && !blocked && !paused) {
