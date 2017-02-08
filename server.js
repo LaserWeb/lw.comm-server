@@ -68,6 +68,7 @@ var readyToSend = true;
 
 var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
 var grblBufferSize = [];
+var new_grbl_buffer= false;
 
 var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
 var smoothie_buffer = true;
