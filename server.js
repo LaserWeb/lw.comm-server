@@ -66,12 +66,14 @@ var queuePos = 0;
 var queuePointer = 0;
 var readyToSend = true;
 
+var optimizeGcode = false;
+
 var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
 var grblBufferSize = [];
 var new_grbl_buffer= false;
 
 var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
-var smoothie_buffer = true;
+var smoothie_buffer = false;
 var lastMode;
 
 var TINYG_RX_BUFFER_SIZE = 4;       // max. lines of gcode to send before wait for ok
@@ -747,31 +749,33 @@ io.sockets.on('connection', function (appSocket) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
                     var tosend = line[0];
                     if (tosend.length > 0) {
-                        var newMode;
-                        if (tosend.indexOf('G0') === 0) {
-                            tosend = tosend.replace(/\s+/g, '');
-                            newMode = 'G0';
-                        } else if (tosend.indexOf('G1') === 0) {
-                            tosend = tosend.replace(/\s+/g, '');
-                            newMode = 'G1';
-                        } else if (tosend.indexOf('G2') === 0) {
-                            tosend = tosend.replace(/\s+/g, '');
-                            newMode = 'G2';
-                        } else if (tosend.indexOf('G3') === 0) {
-                            tosend = tosend.replace(/\s+/g, '');
-                            newMode = 'G3';
-                        } else if (tosend.indexOf('X') === 0) {
-                            tosend = tosend.replace(/\s+/g, '');
-                        } else if (tosend.indexOf('Y') === 0) {
-                            tosend = tosend.replace(/\s+/g, '');
-                        } else if (tosend.indexOf('Z') === 0) {
-                            tosend = tosend.replace(/\s+/g, '');
-                        }
-                        if (newMode) {
-                            if (newMode === lastMode) {
-                                tosend.substr(2);
-                            } else {
-                                lastMode = newMode;
+                        if (optimizeGcode) {
+                            var newMode;
+                            if (tosend.indexOf('G0') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G0';
+                            } else if (tosend.indexOf('G1') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G1';
+                            } else if (tosend.indexOf('G2') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G2';
+                            } else if (tosend.indexOf('G3') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G3';
+                            } else if (tosend.indexOf('X') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('Y') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('Z') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                            }
+                            if (newMode) {
+                                if (newMode === lastMode) {
+                                    tosend.substr(2);
+                                } else {
+                                    lastMode = newMode;
+                                }
                             }
                         }
                         //console.log(line);
@@ -828,22 +832,26 @@ io.sockets.on('connection', function (appSocket) {
                     feed = 'F' + feed;   
                 }
             }
-            switch (firmware) {
-                case 'grbl':
-                    addQ('$J=G91' + dir + dist + feed + '\n');
-                    break;
-                case 'smoothie':
-                    addQ('G91');
-                    addQ('G0' + feed + dir + dist);
-                    addQ('G90');
-                    break;
-                case 'tinyg':
-                    addQ('G91');
-                    addQ('G0' + feed + dir + dist);
-                    addQ('G90');
-                    break;
+            if (dir && dist && feed) {
+                switch (firmware) {
+                    case 'grbl':
+                        addQ('$J=G91' + dir + dist + feed);
+                        break;
+                    case 'smoothie':
+                        addQ('G91');
+                        addQ('G0' + feed + dir + dist);
+                        addQ('G90');
+                        break;
+                    case 'tinyg':
+                        addQ('G91');
+                        addQ('G0' + feed + dir + dist);
+                        addQ('G90');
+                        break;
+                }
+                send1Q();
+            } else {
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid Jod Params!'), 1);    
             }
-            send1Q();
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -994,6 +1002,7 @@ io.sockets.on('connection', function (appSocket) {
             data = data.split(',');
             var power = parseFloat(data[0]);
             var duration = parseInt(data[1]);
+            var maxS = parseFloat(data[2]);
             if (power > 0) {
                 if (!laserTestOn) {
                     // laserTest is off
@@ -1002,7 +1011,7 @@ io.sockets.on('connection', function (appSocket) {
                         switch (firmware) {
                             case 'grbl':
                                 addQ('G1F1');
-                                addQ('M3S' + power);
+                                addQ('M3S' + power * maxS);
                                 laserTestOn = true;
                                 appSocket.emit('laserTest', power);
                                 if (duration > 0) {
@@ -1035,7 +1044,7 @@ io.sockets.on('connection', function (appSocket) {
                                 break;
                             case 'tinyg':
                                 addQ('G1F1');
-                                addQ('M3S' + power);
+                                addQ('M3S' + power * maxS);
                                 laserTestOn = true;
                                 appSocket.emit('laserTest', power);
                                 if (duration > 0) {
@@ -1418,7 +1427,7 @@ function send1Q() {
             speed = (queuePointer / elapsedTime).toFixed(0);
             writeLog('Done: ' + queuePointer + ' of ' + queueLen + ' (ave. ' + speed + ' lines/s)', 1);
         }
-        if (startTime && (queueLen - queuePointer) === 0) {
+        if (startTime && (queueLen - queuePointer) <= 0) {
             finishTime = new Date(Date.now());
             elapsedTimeMS = finishTime.getTime() - startTime.getTime();
             elapsedTime = Math.round(elapsedTimeMS / 1000);
