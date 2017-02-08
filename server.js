@@ -850,7 +850,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 send1Q();
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid Jod Params!'), 1);    
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid job params!'), 1);    
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1006,12 +1006,12 @@ io.sockets.on('connection', function (appSocket) {
             if (power > 0) {
                 if (!laserTestOn) {
                     // laserTest is off
-                    writeLog('laserTest: ' + 'Power ' + power + ', Duration ' + duration, 1);
+                    writeLog('laserTest: ' + 'Power ' + power + ', Duration ' + duration + ', maxS ' + maxS, 1);
                     if (duration >= 0) {
                         switch (firmware) {
                             case 'grbl':
                                 addQ('G1F1');
-                                addQ('M3S' + power * maxS);
+                                addQ('M3S' + power / 100 * maxS);
                                 laserTestOn = true;
                                 appSocket.emit('laserTest', power);
                                 if (duration > 0) {
@@ -1044,7 +1044,7 @@ io.sockets.on('connection', function (appSocket) {
                                 break;
                             case 'tinyg':
                                 addQ('G1F1');
-                                addQ('M3S' + power * maxS);
+                                addQ('M3S' + power / 100 * maxS);
                                 laserTestOn = true;
                                 appSocket.emit('laserTest', power);
                                 if (duration > 0) {
