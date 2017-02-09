@@ -1011,7 +1011,7 @@ io.sockets.on('connection', function (appSocket) {
                         switch (firmware) {
                             case 'grbl':
                                 addQ('G1F1');
-                                addQ('M3S' + power / 100 * maxS);
+                                addQ('M3S' + parseInt(power * maxS / 100));
                                 laserTestOn = true;
                                 appSocket.emit('laserTest', power);
                                 if (duration > 0) {
@@ -1044,7 +1044,7 @@ io.sockets.on('connection', function (appSocket) {
                                 break;
                             case 'tinyg':
                                 addQ('G1F1');
-                                addQ('M3S' + power / 100 * maxS);
+                                addQ('M3S' + parseInt(power * maxS / 100));
                                 laserTestOn = true;
                                 appSocket.emit('laserTest', power);
                                 if (duration > 0) {
