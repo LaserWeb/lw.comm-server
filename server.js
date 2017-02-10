@@ -1108,7 +1108,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('pause', function (data) {
+    appSocket.on('pause', function () {
         if (isConnected) {
             paused = true;
             writeLog(chalk.red('PAUSE'), 1);
@@ -1135,7 +1135,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('resume', function (data) {
+    appSocket.on('resume', function () {
         if (isConnected) {
             writeLog(chalk.red('UNPAUSE'), 1);
             //io.sockets.emit('connectStatus', 'unpaused:' + port.path);
@@ -1170,7 +1170,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('stop', function (data) {
+    appSocket.on('stop', function () {
         if (isConnected) {
             paused = true;
             writeLog(chalk.red('STOP'), 1);
