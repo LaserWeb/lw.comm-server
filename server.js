@@ -68,6 +68,8 @@ var readyToSend = true;
 
 var optimizeGcode = false;
 
+var supportedInterfaces = new Array('USB'); //, 'Telnet', 'ESP8266');
+
 var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
 var grblBufferSize = [];
 var new_grbl_buffer= false;
@@ -143,15 +145,29 @@ io.sockets.on('connection', function (appSocket) {
     // save new connection
     connections.push(appSocket);
 
+    // send supported interfaces
+    appSocket.emit('interfaces', supportedInterfaces);
+
     // send available ports
     serialport.list(function (err, ports) {
         appSocket.emit('ports', ports);
     });
 
-    appSocket.on('firstLoad', function (data) {
-        writeLog(chalk.yellow('INFO: ') + chalk.blue('Firstload called ' + data), 1);
+    if (isConnected) {
+        appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
+        if (port) {
+            appSocket.emit('connectStatus', 'opened:' + port.path);
+        } else {
+            appSocket.emit('connectStatus', 'opened:' + connectedTo);
+        }
+    } else {
+        appSocket.emit('connectStatus', 'Connect');
+    }
+
+    appSocket.on('firstLoad', function () {
+        writeLog(chalk.yellow('INFO: ') + chalk.blue('Firstload called'), 1);
         appSocket.emit('serverConfig', config);
-        appSocket.emit('interfaces', 'USB, Telnet, ESP8266');
+        appSocket.emit('interfaces', supportedInterfaces);
         serialport.list(function (err, ports) {
             appSocket.emit('ports', ports);
         });
@@ -180,18 +196,19 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('getInterfaces', function (data) { // Deliver supported Interfaces
-        appSocket.emit('interfaces', 'USB, Telnet, ESP8266');
+    appSocket.on('getInterfaces', function () { // Deliver supported Interfaces
+        writeLog(chalk.yellow('INFO: ') + chalk.blue('Requesting Interfaces '), 1);
+        appSocket.emit('interfaces', supportedInterfaces);
     });
 
-    appSocket.on('getPorts', function (data) { // Refresh serial port list
+    appSocket.on('getPorts', function () { // Refresh serial port list
         writeLog(chalk.yellow('INFO: ') + chalk.blue('Requesting Ports list '), 1);
         serialport.list(function (err, ports) {
             appSocket.emit('ports', ports);
         });
     });
 
-    appSocket.on('getConnectStatus', function (data) { // Report active serial port to web-client
+    appSocket.on('getConnectStatus', function () { // Report active serial port to web-client
         writeLog(chalk.yellow('INFO: ') + chalk.blue('getConnectStatus ' + data), 1);
         if (isConnected) {
             appSocket.emit('activeInterface', connectionType);
@@ -297,7 +314,7 @@ io.sockets.on('connection', function (appSocket) {
                                 wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
                             }
                             if (Array.isArray(wPos)) {
-                                var send = false;
+                                var send = true;
                                 if (xPos !== parseFloat(wPos[0]).toFixed(4)) {
                                     xPos = parseFloat(wPos[0]).toFixed(4);
                                     send = true;
@@ -311,22 +328,22 @@ io.sockets.on('connection', function (appSocket) {
                                     send = true;
                                 }
                                 if (send) {
-                                    appSocket.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
                                 }
                             }
 
-                            // Extract mPos
-                            var startMPos = data.search(/mpos:/i) + 5;
-                            var mPos;
-                            if (startMPos > 5) {
-                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
-                            }
-                            if (Array.isArray(mPos)) {
-                                xPos = parseFloat(mPos[0]).toFixed(4);
-                                yPos = parseFloat(mPos[1]).toFixed(4);
-                                zPos = parseFloat(mPos[2]).toFixed(4);
-                                appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
-                            }
+//                            // Extract mPos
+//                            var startMPos = data.search(/mpos:/i) + 5;
+//                            var mPos;
+//                            if (startMPos > 5) {
+//                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
+//                            }
+//                            if (Array.isArray(mPos)) {
+//                                xPos = parseFloat(mPos[0]).toFixed(4);
+//                                yPos = parseFloat(mPos[1]).toFixed(4);
+//                                zPos = parseFloat(mPos[2]).toFixed(4);
+//                                appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
+//                            }
 
                             // Extract override values (for Grbl > v1.1 only!)
                             var startOv = data.search(/ov:/i) + 3;
@@ -334,27 +351,27 @@ io.sockets.on('connection', function (appSocket) {
                                 var ov = data.replace('>', '').substr(startOv).split(/,|\|/, 3);
                                 if (Array.isArray(ov)) {
                                     if (ov[0]) {
-                                        appSocket.emit('feedOverride', ov[0]);
+                                        io.sockets.emit('feedOverride', ov[0]);
                                     }
                                     if (ov[1]) {
-                                        appSocket.emit('rapidOverride', ov[1]);
+                                        io.sockets.emit('rapidOverride', ov[1]);
                                     }
                                     if (ov[2]) {
-                                        appSocket.emit('spindleOverride', ov[2]);
+                                        io.sockets.emit('spindleOverride', ov[2]);
                                     }
                                 }
                             }
 
-                            // Extract realtime Feedrate (for Grbl > v1.1 only!)
+                            // Extract realtime Feed and Spindle (for Grbl > v1.1 only!)
                             var startFS = data.search(/FS:/i) + 3;
                             if (startFS > 3) {
                                 var fs = data.replace('>', '').substr(startFS).split(/,|\|/, 2);
                                 if (Array.isArray(fs)) {
                                     if (fs[0]) {
-                                        appSocket.emit('realFeed', fs[0]);
+                                        io.sockets.emit('realFeed', fs[0]);
                                     }
                                     if (fs[1]) {
-                                        appSocket.emit('realSpindle', fs[1]);
+                                        io.sockets.emit('realSpindle', fs[1]);
                                     }
                                 }
                             }
@@ -364,7 +381,7 @@ io.sockets.on('connection', function (appSocket) {
                             fVersion = data.substr(5, 4); // get version
                             fDate = null;
                             writeLog('GRBL detected (' + fVersion + ')', 1);
-                            appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
+                            io.sockets.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
                             // Start intervall for status queries
                             statusLoop = setInterval(function () {
                                 if (isConnected) {
@@ -380,7 +397,7 @@ io.sockets.on('connection', function (appSocket) {
                             fDate = new Date(data.substr(startPos).split(/,/, 1));
                             var dateString = fDate.toDateString();
                             writeLog('Smoothieware detected (' + fVersion + ', ' + dateString + ')', 1);
-                            appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
+                            io.sockets.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
                             // Start intervall for status queries
                             statusLoop = setInterval(function () {
                                 if (isConnected) {
@@ -439,7 +456,6 @@ io.sockets.on('connection', function (appSocket) {
                             }
                             if (jsObject.hasOwnProperty('sr')) {
                                 writeLog('statusChanged ' + jsObject.sr, 3);
-                                var xPos, yPos, zPos;
                                 var jsObject = JSON.parse(data);
                                 if (jsObject.sr.posx) {
                                     xPos = parseFloat(jsObject.sr.posx).toFixed(4);
@@ -450,7 +466,7 @@ io.sockets.on('connection', function (appSocket) {
                                 if (jsObject.sr.posz) {
                                     zPos = parseFloat(jsObject.sr.posz).toFixed(4);
                                 }
-                                appSocket.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                                io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
                             }
                             if (jsObject.hasOwnProperty('gc')) {
                                 writeLog('gcodeReceived ' + jsObject.gc, 3);
@@ -463,7 +479,7 @@ io.sockets.on('connection', function (appSocket) {
                                 fVersion = jsObject.fb;
                                 fDate = null;
                                 writeLog('TinyG detected (' + fVersion + ')', 1);
-                                appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
+                                io.sockets.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
                                 // Start intervall for status queries
                                 statusLoop = setInterval(function () {
                                     if (isConnected) {
