@@ -252,9 +252,9 @@ io.sockets.on('connection', function (appSocket) {
                         connectedTo = port.path;
 
                         // Start interval for qCount messages to socket clients
-                        queueCounter = setInterval(function () {
-                            io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
-                        }, 500);
+//                        queueCounter = setInterval(function () {
+//                            io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
+//                        }, 500);
                     });
 
                     port.on('close', function () { // open errors will be emitted as an error event
@@ -287,7 +287,7 @@ io.sockets.on('connection', function (appSocket) {
                             send1Q();
                         } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
                             var state = data.substring(1, data.search(/(,|\|)/));
-                            appSocket.emit('runStatus', state);
+                            //appSocket.emit('runStatus', state);
                             
                             // Extract wPos
                             var startWPos = data.search(/wpos:/i) + 5;
@@ -746,7 +746,7 @@ io.sockets.on('connection', function (appSocket) {
                 data = data.split('\n');
                 for (var i = 0; i < data.length; i++) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
-                    var tosend = line[0];
+                    var tosend = line[0].trim();
                     if (tosend.length > 0) {
                         if (optimizeGcode) {
                             var newMode;
@@ -784,6 +784,10 @@ io.sockets.on('connection', function (appSocket) {
                 if (i > 0) {
                     io.sockets.emit('runStatus', 'run');
                     startTime = new Date(Date.now());
+                    // Start interval for qCount messages to socket clients
+                    queueCounter = setInterval(function () {
+                        io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
+                    }, 500);
                     send1Q();
                 }
             }
@@ -801,7 +805,7 @@ io.sockets.on('connection', function (appSocket) {
                 data = data.split('\n');
                 for (var i = 0; i < data.length; i++) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
-                    var tosend = line[0];
+                    var tosend = line[0].trim();
                     if (tosend.length > 0) {
                         addQ(tosend);
                     }
@@ -1170,6 +1174,8 @@ io.sockets.on('connection', function (appSocket) {
 //                    machineSend('%'); // dump TinyG queue
                     break;
             }
+            clearInterval(queueCounter);
+            io.sockets.emit('qCount', 0);
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
             tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
@@ -1427,6 +1433,7 @@ function send1Q() {
             writeLog('Done: ' + queuePointer + ' of ' + queueLen + ' (ave. ' + speed + ' lines/s)', 1);
         }
         if (startTime && (queueLen - queuePointer) <= 0) {
+            clearInterval(queueCounter);
             finishTime = new Date(Date.now());
             elapsedTimeMS = finishTime.getTime() - startTime.getTime();
             elapsedTime = Math.round(elapsedTimeMS / 1000);
@@ -1443,6 +1450,7 @@ function send1Q() {
             queuePointer = 0;
             queuePos = 0;
             startTime = null;
+            io.sockets.emit('qCount', 0);
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
