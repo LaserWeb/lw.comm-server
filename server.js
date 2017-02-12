@@ -879,10 +879,9 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('zeroAxis', function (data) {
-        writeLog(chalk.red('Zero Axis ' + data), 1);
+    appSocket.on('setZero', function (data) {
+        writeLog(chalk.red('setZero ' + data), 1);
         if (isConnected) {
-            data = 'all';
             switch (data) {
                 case 'x':
                     addQ('G10 L20 P0﻿ X0');
@@ -895,6 +894,31 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 case 'all':
                     addQ('G10 L20 P0﻿ X0 Y0 Z0');
+                    break;
+            }
+            send1Q();
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
+    appSocket.on('gotoZero', function (data) {
+        writeLog(chalk.red('gotoZero ' + data), 1);
+        if (isConnected) {
+            switch (data) {
+                case 'x':
+                    addQ('G0 X0');
+                    break;
+                case 'y':
+                    addQ('G0 Y0');
+                    break;
+                case 'z':
+                    addQ('G0 Z0');
+                    break;
+                case 'all':
+                    addQ('G0 X0 Y0 Z0');
                     break;
             }
             send1Q();
@@ -1453,14 +1477,15 @@ function send1Q() {
         }
         if (startTime && (queueLen - queuePointer) <= 0) {
             clearInterval(queueCounter);
+            io.sockets.emit('qCount', 0);
             finishTime = new Date(Date.now());
             elapsedTimeMS = finishTime.getTime() - startTime.getTime();
             elapsedTime = Math.round(elapsedTimeMS / 1000);
             speed = (queuePointer / elapsedTime).toFixed(0);
-            writeLog("Job started at " + startTime.toString());
-            writeLog("Job finished at " + finishTime.toString());
-            writeLog("Elapsed time: " + elapsedTime + " seconds.");
-            writeLog('Ave. Speed: ' + speed + ' lines/s');
+            writeLog("Job started at " + startTime.toString(), 1);
+            writeLog("Job finished at " + finishTime.toString(), 1);
+            writeLog("Elapsed time: " + elapsedTime + " seconds.", 1);
+            writeLog('Ave. Speed: ' + speed + ' lines/s', 1);
 
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
@@ -1469,7 +1494,6 @@ function send1Q() {
             queuePointer = 0;
             queuePos = 0;
             startTime = null;
-            io.sockets.emit('qCount', 0);
             io.sockets.emit('runStatus', 'stopped');
         }
     } else {
