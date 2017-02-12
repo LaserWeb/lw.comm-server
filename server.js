@@ -487,7 +487,7 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }, 250);
                             }
-                        } else if (data.indexOf('ALARM') === 0) {
+                        } else if (data.indexOf('ALARM') === 0 || data.indexOf('HALTED') === 0) {
                             writeLog('Emptying Queue', 1);
                             gcodeQueue.length = 0; // dump the queye
                             grblBufferSize.length = 0; // dump bufferSizes
@@ -799,12 +799,12 @@ io.sockets.on('connection', function (appSocket) {
                     }
                 }
                 if (i > 0) {
-                    io.sockets.emit('runStatus', 'run');
                     startTime = new Date(Date.now());
                     // Start interval for qCount messages to socket clients
                     queueCounter = setInterval(function () {
                         io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
                     }, 500);
+                    io.sockets.emit('runStatus', 'running');
                     send1Q();
                 }
             }
@@ -828,7 +828,7 @@ io.sockets.on('connection', function (appSocket) {
                     }
                 }
                 if (i > 0) {
-                    io.sockets.emit('runStatus', 'run');
+                    io.sockets.emit('runStatus', 'running');
                     send1Q();
                 }
             }
@@ -1127,7 +1127,7 @@ io.sockets.on('connection', function (appSocket) {
                     machineSend('!'); // Send hold command
                     break;
             }
-            //io.sockets.emit("connectStatus", 'paused');
+            io.sockets.emit('runStatus', 'paused');
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -1152,6 +1152,7 @@ io.sockets.on('connection', function (appSocket) {
             }
             paused = false;
             send1Q(); // restart queue
+            io.sockets.emit('runStatus', 'resumed');
 //            switch (connectionType) {
 //                case 'usb':
 //                    io.sockets.emit("connectStatus", 'opened:' + port.path);
@@ -1203,7 +1204,7 @@ io.sockets.on('connection', function (appSocket) {
             startTime = null;
 //            blocked = false;
 //            paused = false;
-            io.sockets.emit("stopped", 0);
+            io.sockets.emit('runStatus', 'stopped');
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -1260,6 +1261,7 @@ io.sockets.on('connection', function (appSocket) {
                     }
                     break;
             }
+            io.sockets.emit('runStatus', 'stopped');
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -1468,6 +1470,7 @@ function send1Q() {
             queuePos = 0;
             startTime = null;
             io.sockets.emit('qCount', 0);
+            io.sockets.emit('runStatus', 'stopped');
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
