@@ -487,7 +487,7 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }, 250);
                             }
-                        } else if (data.indexOf('ALARM') === 0) {
+                        } else if (data.indexOf('ALARM') === 0 || data.indexOf('HALTED') === 0) {
                             writeLog('Emptying Queue', 1);
                             gcodeQueue.length = 0; // dump the queye
                             grblBufferSize.length = 0; // dump bufferSizes
@@ -1005,12 +1005,12 @@ io.sockets.on('connection', function (appSocket) {
                     }
                 }
                 if (i > 0) {
-                    io.sockets.emit('runStatus', 'run');
                     startTime = new Date(Date.now());
                     // Start interval for qCount messages to socket clients
                     queueCounter = setInterval(function () {
                         io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
                     }, 500);
+                    io.sockets.emit('runStatus', 'running');
                     send1Q();
                 }
             }
@@ -1034,7 +1034,7 @@ io.sockets.on('connection', function (appSocket) {
                     }
                 }
                 if (i > 0) {
-                    io.sockets.emit('runStatus', 'run');
+                    io.sockets.emit('runStatus', 'running');
                     send1Q();
                 }
             }
@@ -1357,7 +1357,7 @@ io.sockets.on('connection', function (appSocket) {
                     machineSend('!'); // Send hold command
                     break;
             }
-            //io.sockets.emit("connectStatus", 'paused');
+            io.sockets.emit('runStatus', 'paused');
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -1382,6 +1382,7 @@ io.sockets.on('connection', function (appSocket) {
             }
             paused = false;
             send1Q(); // restart queue
+            io.sockets.emit('runStatus', 'resumed');
 //            switch (connectionType) {
 //                case 'usb':
 //                    io.sockets.emit("connectStatus", 'opened:' + port.path);
@@ -1443,7 +1444,7 @@ io.sockets.on('connection', function (appSocket) {
             startTime = null;
 //            blocked = false;
 //            paused = false;
-            io.sockets.emit("stopped", 0);
+            io.sockets.emit('runStatus', 'stopped');
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -1500,6 +1501,7 @@ io.sockets.on('connection', function (appSocket) {
                     }
                     break;
             }
+            io.sockets.emit('runStatus', 'stopped');
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -1712,14 +1714,15 @@ function send1Q() {
         }
         if (startTime && (queuePointer >= gcodeQueue.length)) {
             clearInterval(queueCounter);
+            io.sockets.emit('qCount', 0);
             finishTime = new Date(Date.now());
             elapsedTimeMS = finishTime.getTime() - startTime.getTime();
             elapsedTime = Math.round(elapsedTimeMS / 1000);
             speed = (queuePointer / elapsedTime).toFixed(0);
-            writeLog("Job started at " + startTime.toString());
-            writeLog("Job finished at " + finishTime.toString());
-            writeLog("Elapsed time: " + elapsedTime + " seconds.");
-            writeLog('Ave. Speed: ' + speed + ' lines/s');
+            writeLog("Job started at " + startTime.toString(), 1);
+            writeLog("Job finished at " + finishTime.toString(), 1);
+            writeLog("Elapsed time: " + elapsedTime + " seconds.", 1);
+            writeLog('Ave. Speed: ' + speed + ' lines/s', 1);
 
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
@@ -1728,7 +1731,7 @@ function send1Q() {
             queuePointer = 0;
             queuePos = 0;
             startTime = null;
-            io.sockets.emit('qCount', 0);
+            io.sockets.emit('runStatus', 'stopped');
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
