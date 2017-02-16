@@ -1,6 +1,6 @@
 {
   "name": "lw.comm-server",
-  "version": "4.0.12",
+  "version": "4.0.29",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "contributors": [
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
@@ -22,7 +22,6 @@
     "request": "*",
     "serialport": "*",
     "socket.io": "*",
-    "telnet-client": "*",
     "ws": "^1.1.1"
   },
   "license": "AGPL-3.0",
@@ -44,7 +43,8 @@
     "usb",
     "serial",
     "ethernet",
-    "gateway"
+    "gateway",
+    "ESP8266"
   ],
   "author": "Claudio Prezzi"
 }

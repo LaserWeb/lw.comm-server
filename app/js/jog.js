@@ -1,6 +1,6 @@
 function initJog() {
 
-  $('body').on('keydown', function(ev) {
+    $('body').on('keydown', function(ev) {
 		if (ev.keyCode === 17) {
 			//CTRL key down > set override stepping to 10
 			ovStep = 10;

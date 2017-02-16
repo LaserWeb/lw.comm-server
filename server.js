@@ -1022,7 +1022,7 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('runCommand', function (data) {
-        writeLog(chalk.red('Run Command (' + data + ')'), 1);
+        writeLog(chalk.red('Run Command (' + data.replace('\n', '|') + ')'), 1);
         if (isConnected) {
             if (data) {
                 data = data.split('\n');
@@ -1731,7 +1731,7 @@ function send1Q() {
             queuePointer = 0;
             queuePos = 0;
             startTime = null;
-            io.sockets.emit('runStatus', 'stopped');
+            io.sockets.emit('runStatus', 'finished');
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
