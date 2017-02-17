@@ -31,12 +31,11 @@ var SerialPort = serialport;
 var websockets = require('socket.io');
 var app = require('http').createServer(handler);
 var io = websockets.listen(app);
-//var telnet = require('telnet-client');
 var WebSocket = require('ws');
 var net = require('net');
 var fs = require('fs');
 var nstatic = require('node-static');
-var url = require('url');
+//var url = require('url');
 var util = require('util');
 var chalk = require('chalk');
 var request = require('request'); // proxy for remote webcams
@@ -59,8 +58,9 @@ var firmware, fVersion, fDate;
 var feedOverride = 100;
 var spindleOverride = 100;
 var laserTestOn = false;
+
+var runningJob;
 var startTime;
-var rd;
 var queueLen;
 var queuePos = 0;
 var queuePointer = 0;
@@ -68,7 +68,7 @@ var readyToSend = true;
 
 var optimizeGcode = false;
 
-var supportedInterfaces = new Array('USB', 'ESP8266'); //, 'Telnet', 'ESP8266');
+var supportedInterfaces = new Array('USB', 'ESP8266'); //, 'Telnet');
 
 var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
 var grblBufferSize = [];
@@ -128,11 +128,11 @@ function handler(req, res) {
             }).pipe(res);
         }
     } else {
-        webServer.serve(req, res, function (err, result) {
-            if (err) {
-                console.error(chalk.red('ERROR:'), chalk.yellow(' webServer error:' + req.url + ' : '), err.message);
-            }
-        });
+//        webServer.serve(req, res, function (err, result) {
+//            if (err) {
+//                console.error(chalk.red('ERROR:'), chalk.yellow(' webServer error:' + req.url + ' : '), err.message);
+//            }
+//        });
     }
 }
 
@@ -154,11 +154,14 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     if (isConnected) {
-        appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
+        appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
         if (port) {
             appSocket.emit('connectStatus', 'opened:' + port.path);
         } else {
             appSocket.emit('connectStatus', 'opened:' + connectedTo);
+        }
+        if (runningJob) {
+            appSocket.emit('runningJob', runningJob);
         }
     } else {
         appSocket.emit('connectStatus', 'Connect');
@@ -185,7 +188,7 @@ io.sockets.on('connection', function (appSocket) {
                     appSocket.emit('activeIP', connectedTo);
                     break;
             }
-            appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
+            appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
             if (port) {
                 appSocket.emit('connectStatus', 'opened:' + port.path);
             } else {
@@ -224,7 +227,7 @@ io.sockets.on('connection', function (appSocket) {
                     appSocket.emit('activeIP', connectedTo);
                     break;
             }
-            appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
+            appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
             if (port) {
                 appSocket.emit('connectStatus', 'opened:' + port.path);
             } else {
@@ -233,6 +236,14 @@ io.sockets.on('connection', function (appSocket) {
         } else {
             appSocket.emit('connectStatus', 'Connect');
         }
+    });
+
+    appSocket.on('getFirmware', function (data) { // Deliver Firmware to Web-Client
+        appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+    });
+
+    appSocket.on('getRunningJob', function (data) { // Deliver running Job to Web-Client
+        appSocket.emit('runningJob', runningJob);
     });
 
     appSocket.on('connectTo', function (data) { // If a user picks a port to connect to, open a Node SerialPort Instance to it
@@ -250,7 +261,7 @@ io.sockets.on('connection', function (appSocket) {
 
                     // Serial port events -----------------------------------------------
                     port.on('open', function () {
-                        io.sockets.emit('activePorts', port.path + ',' + port.options.baudRate);
+                        io.sockets.emit('activePort', {port: port.path, baudrate: port.options.baudRate});
                         io.sockets.emit('connectStatus', 'opened:' + port.path);
                         //machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for grbl-lpc)
                         setTimeout(function() { //wait for controller to be ready
@@ -315,20 +326,20 @@ io.sockets.on('connection', function (appSocket) {
                             }
                             if (Array.isArray(wPos)) {
                                 var send = true;
-                                if (xPos !== parseFloat(wPos[0]).toFixed(4)) {
-                                    xPos = parseFloat(wPos[0]).toFixed(4);
+                                if (xPos !== parseFloat(wPos[0]).toFixed(config.posDecimals)) {
+                                    xPos = parseFloat(wPos[0]).toFixed(config.posDecimals);
                                     send = true;
                                 }
-                                if (yPos !== parseFloat(wPos[1]).toFixed(4)) {
-                                    yPos = parseFloat(wPos[1]).toFixed(4);
+                                if (yPos !== parseFloat(wPos[1]).toFixed(config.posDecimals)) {
+                                    yPos = parseFloat(wPos[1]).toFixed(config.posDecimals);
                                     send = true;
                                 }
-                                if (zPos !== parseFloat(wPos[2]).toFixed(4)) {
-                                    zPos = parseFloat(wPos[2]).toFixed(4);
+                                if (zPos !== parseFloat(wPos[2]).toFixed(config.posDecimals)) {
+                                    zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
                                     send = true;
                                 }
                                 if (send) {
-                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
                                 }
                             }
 
@@ -487,31 +498,33 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }, 250);
                             }
-                        } else if (data.indexOf('ALARM') === 0 || data.indexOf('HALTED') === 0) {
-                            writeLog('Emptying Queue', 1);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE;
-                            writeLog('Clearing Lockout', 1);
-                            switch (firmware) {
-                                case 'grbl':
-                                    machineSend('$X\n');
-                                    blocked = false;
-                                    paused = false;
-                                    break;
-                                case 'smoothie':
-                                    machineSend('$X\n'); //M999
-                                    blocked = false;
-                                    paused = false;
-                                    break;
-                                case 'tinyg':
-                                    machineSend('%'); // flush tinyg quere
-                                    machineSend('~'); // resume
-                                    blocked = false;
-                                    paused = false;
-                                    break;
-                            }
-                        } else if (data.indexOf('error') === 0) {
+                        } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
+//                            data = data.split(':');
+//                            io.sockets.emit('alarm', data[1]);
+//                            writeLog('Emptying Queue', 1);
+//                            gcodeQueue.length = 0; // dump the queye
+//                            grblBufferSize.length = 0; // dump bufferSizes
+//                            tinygBufferSize = TINYG_RX_BUFFER_SIZE;
+//                            writeLog('Clearing Lockout', 1);
+//                            switch (firmware) {
+//                                case 'grbl':
+//                                    machineSend('$X\n');
+//                                    blocked = false;
+//                                    paused = false;
+//                                    break;
+//                                case 'smoothie':
+//                                    machineSend('$X\n'); //M999
+//                                    blocked = false;
+//                                    paused = false;
+//                                    break;
+//                                case 'tinyg':
+//                                    machineSend('%'); // flush tinyg quere
+//                                    machineSend('~'); // resume
+//                                    blocked = false;
+//                                    paused = false;
+//                                    break;
+//                            }
+                        } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                             if (firmware === 'grbl') {
                                 grblBufferSize.shift();
                             }
@@ -958,14 +971,11 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('getFirmware', function (data) { // Deliver Firmware to Web-Client
-        appSocket.emit('firmware', firmware + ',' + fVersion + ',' + fDate);
-    });
-
     appSocket.on('runJob', function (data) {
         writeLog('Run Job (' + data.length + ')', 1);
         if (isConnected) {
             if (data) {
+                runningJob = data;
                 data = data.split('\n');
                 for (var i = 0; i < data.length; i++) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
@@ -1419,9 +1429,9 @@ io.sockets.on('connection', function (appSocket) {
                     queuePointer = 0;
                     queuePos = 0;
                     startTime = null;
+                    machineSend(String.fromCharCode(0x18)); // ctrl-x
                     blocked = false;
                     paused = false;
-                    machineSend(String.fromCharCode(0x18)); // ctrl-x
                     break;
                 case 'smoothie':
                     paused = true;
@@ -1442,6 +1452,7 @@ io.sockets.on('connection', function (appSocket) {
             queuePos = 0;
             laserTestOn = false;
             startTime = null;
+            runningJob = null;
 //            blocked = false;
 //            paused = false;
             io.sockets.emit('runStatus', 'stopped');
@@ -1731,6 +1742,7 @@ function send1Q() {
             queuePointer = 0;
             queuePos = 0;
             startTime = null;
+            runningJob = null;
             io.sockets.emit('runStatus', 'finished');
         }
     } else {
