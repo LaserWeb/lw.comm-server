@@ -8,9 +8,8 @@
 2.  `cd mybuildenv` (or whatever you want to call it)
 3.  `git clone https://github.com/LaserWeb/lw.comm-server.git`
 4.  `git clone https://github.com/LaserWeb/LaserWeb4.git`
-5.  `git clone https://github.com/LaserWeb/LaserWeb4-Installer.git`
-6.  `cd LaserWeb4 && git fetch && git checkout dev_comms && npm install  --verbose && npm run installdev`
-7.  `cd .. && cd lw.comm-server && npm install --verbose`
+5.  `cd LaserWeb4 && git fetch && git checkout dev_comms && npm install  --verbose && npm run installdev`
+6.  `cd .. && cd lw.comm-server && npm install --verbose`
 
 ### Prepare LW4 /dist
 1.  `cd LaserWeb4`
@@ -24,4 +23,6 @@
 1.   Run `npm run dist` to create installer
 
 
-mkdir mybuildenv && cd mybuildenv && git clone https://github.com/LaserWeb/lw.comm-server.git && git clone https://github.com/LaserWeb/LaserWeb4.git && cd LaserWeb4 && git fetch && git checkout dev_comms && npm install && npm run installdev && cd .. && cd lw.comm-server && npm install && cd .. && cd LaserWeb4 && npm run bundle-dev && cd .. && cd lw.comm-server && ./node_modules/.bin/electron-rebuild
+## Single Walk-away command
+(Only after confirming each step on its own works)
+`mkdir mybuildenv && cd mybuildenv && git clone https://github.com/LaserWeb/lw.comm-server.git && git clone https://github.com/LaserWeb/LaserWeb4.git && cd LaserWeb4 && git fetch && git checkout dev_comms && npm install --verbbose && npm run installdev && cd .. && cd lw.comm-server && npm install --verbose && cd .. && cd LaserWeb4 && npm run bundle-dev && cd .. && cd lw.comm-server && ./node_modules/.bin/electron-rebuild && npm run dist`

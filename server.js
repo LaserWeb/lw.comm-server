@@ -720,7 +720,7 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket = new WebSocket('ws://'+connectedIp+'/'); // connect to ESP websocket
                 io.sockets.emit('connectStatus', 'opening:' + connectedIp);
 
-                // ESP socket evnets -----------------------------------------------        
+                // ESP socket evnets -----------------------------------------------
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
                     machineSend(String.fromCharCode(0x18));
@@ -1106,7 +1106,7 @@ io.sockets.on('connection', function (appSocket) {
             if (data.length > 2) {
                 feed = parseInt(data[2]);
                 if (feed) {
-                    feed = 'F' + feed;   
+                    feed = 'F' + feed;
                 }
             }
             if (dir && dist && feed) {
@@ -1127,7 +1127,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 send1Q();
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid job params!'), 1);    
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid job params!'), 1);
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1185,7 +1185,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('feedOverride', function (data) {
         if (isConnected) {
             switch (firmware) {
@@ -1560,7 +1560,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('resetMachine', function () {
         if (isConnected) {
             writeLog(chalk.red('Reset Machine'), 1);
@@ -1581,7 +1581,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('closePort', function (data) { // Close machine port and dump queue
         if (isConnected) {
             switch (connectionType) {
@@ -1625,10 +1625,10 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('disconnect', function () { // Deliver Firmware to Web-Client
         writeLog(chalk.yellow('App disconnectd!'), 1);
-    });    
+    });
 
 }); // End appSocket
 
@@ -1722,7 +1722,7 @@ function send1Q() {
                     gcodeLen = gcodeQueue[queuePointer].length;
                     if (gcodeLen < spaceLeft) {
                         // Add gcode to send buffer
-                        gcodeLine += gcodeQueue[queuePointer]; 
+                        gcodeLine += gcodeQueue[queuePointer];
                         queuePointer++;
                         spaceLeft -= gcodeLen;
                     } else {
@@ -1815,4 +1815,64 @@ function writeLog(line, verb) {
         line = line.split(String.fromCharCode(0x1B) + '[94m').join('');
         logFile.write(time + ' ' + line + '\r\n');
     }
+}
+
+// Electron app
+const electron = require('electron');
+// Module to control application life.
+const electronApp = electron.app;
+
+if (electronApp) {
+    // Module to create native browser window.
+    const BrowserWindow = electron.BrowserWindow;
+
+    // Keep a global reference of the window object, if you don't, the window will
+    // be closed automatically when the JavaScript object is garbage collected.
+    var mainWindow;
+
+    function createWindow() {
+        // Create the browser window.
+        mainWindow = new BrowserWindow({width: 1200, height: 900, fullscreen: false, center: true, resizable: true, title: "LaserWeb", frame: true, autoHideMenuBar: true, icon: '/public/favicon.png' });
+
+        // and load the index.html of the app.
+        mainWindow.loadURL('http://127.0.0.1:8000/lw4');
+
+        // Emitted when the window is closed.
+        mainWindow.on('closed', function () {
+            // Dereference the window object, usually you would store windows
+            // in an array if your app supports multi windows, this is the time
+            // when you should delete the corresponding element.
+            mainWindow = null;
+        });
+        mainWindow.once('ready-to-show', () => {
+          mainWindow.show()
+        })
+        mainWindow.maximize()
+        // mainWindow.webContents.openDevTools()
+    };
+
+    electronApp.commandLine.appendSwitch("--ignore-gpu-blacklist");
+    // This method will be called when Electron has finished
+    // initialization and is ready to create browser windows.
+    // Some APIs can only be used after this event occurs.
+
+
+    electronApp.on('ready', createWindow);
+
+    // Quit when all windows are closed.
+    electronApp.on('window-all-closed', function () {
+        // On OS X it is common for applications and their menu bar
+        // to stay active until the user quits explicitly with Cmd + Q
+        if (process.platform !== 'darwin') {
+            electronApp.quit();
+        }
+    });
+
+    electronApp.on('activate', function () {
+        // On OS X it's common to re-create a window in the app when the
+        // dock icon is clicked and there are no other windows open.
+        if (mainWindow === null) {
+            createWindow();
+        }
+    });
 }

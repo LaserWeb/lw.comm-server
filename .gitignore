@@ -42,6 +42,7 @@ Thumbs.db
 node_modules
 release
 dist
+app/lw4
 # Local settings #
 ##################
 .env
