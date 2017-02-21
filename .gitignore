@@ -40,7 +40,8 @@ ehthumbs.db
 Thumbs.db
 *~
 node_modules
-
+release
+dist
 # Local settings #
 ##################
 .env

@@ -30,7 +30,10 @@
   },
   "homepage": "https://github.com/LaserWeb/lw.comm-server#readme",
   "main": "server.js",
-  "devDependencies": {},
+  "devDependencies": {
+    "electron": "^1.4.15",
+    "electron-rebuild": "^1.5.7"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
