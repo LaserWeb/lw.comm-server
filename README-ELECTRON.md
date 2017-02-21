@@ -25,4 +25,20 @@
 
 ## Single Walk-away command
 (Only after confirming each step on its own works)
-`mkdir mybuildenv && cd mybuildenv && git clone https://github.com/LaserWeb/lw.comm-server.git && git clone https://github.com/LaserWeb/LaserWeb4.git && cd LaserWeb4 && git fetch && git checkout dev_comms && npm install --verbbose && npm run installdev && cd .. && cd lw.comm-server && npm install --verbose && cd .. && cd LaserWeb4 && npm run bundle-dev && cd .. && cd lw.comm-server && ./node_modules/.bin/electron-rebuild && npm run dist`
+```
+mkdir mybuildenv &&\
+cd mybuildenv &&\
+git clone https://github.com/LaserWeb/lw.comm-server.git &&\
+git clone https://github.com/LaserWeb/LaserWeb4.git &&\
+cd LaserWeb4 &&\
+git fetch && git checkout dev_comms &&\
+npm install --verbose &&\
+npm run installdev &&\
+cd .. && cd lw.comm-server &&\
+npm install --verbose &&\
+cd .. && cd LaserWeb4 &&\
+npm run bundle-dev &&\
+cd .. && cd lw.comm-server &&\
+./node_modules/.bin/electron-rebuild &&\
+npm run dist
+```
