@@ -228,7 +228,7 @@ $(document).ready(function() {
     // Version check
 
     var version = $('meta[name=version]').attr("content");
-    $.get( "https://raw.githubusercontent.com/openhardwarecoza/LaserWeb3/master/version.txt", function( data ) {
+    $.get( "https://raw.githubusercontent.com/openhardwarecoza/lw.comm-server/master/version.txt", function( data ) {
         printLog("Version currently Installed : " + version , msgcolor, "git");
         printLog("Version available online on Github : " + data , msgcolor, "git");
         if ( parseInt(version) < parseInt(data) ) {

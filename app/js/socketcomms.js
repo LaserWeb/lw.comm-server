@@ -104,10 +104,9 @@ function initSocket() {
 
     socket.on('firmware', function (data) {
         console.log('firmware: ' + data);
-        data = data.split(',');
-        firmware = data[0];
-        fVersion = data[1];
-        fdate = data[2];
+        firmware = data.firmware;
+        fVersion = data.version;
+        fdate = data.date;
         switch (firmware) {
             case 'grbl':
                 if (fVersion >= '1.1e') { //is Grbl >= v1.1
@@ -298,10 +297,10 @@ function initSocket() {
 
     socket.on('wPos', function (data) {
         gotWPos = true;
-        data = data.split(',');
-        var xPos = parseFloat(data[0]).toFixed(4);
-        var yPos = parseFloat(data[1]).toFixed(4);
-        var zPos = parseFloat(data[2]).toFixed(4);
+        var {x, y, z} = data; // = data.split(',');
+        var xPos = parseFloat(x).toFixed(4);
+        var yPos = parseFloat(y).toFixed(4);
+        var zPos = parseFloat(z).toFixed(4);
         $('#mX').html(xPos);
         $('#mY').html(yPos);
         $('#mZ').html(zPos);
@@ -312,10 +311,10 @@ function initSocket() {
 
     socket.on('mPos', function (data) {
         if (gotWPos != true) {
-            data = data.split(',');
-            var xPos = parseFloat(data[0]).toFixed(4);
-            var yPos = parseFloat(data[1]).toFixed(4);
-            var zPos = parseFloat(data[2]).toFixed(4);
+            var {x, y, z} = data;
+            var xPos = parseFloat(x).toFixed(4);
+            var yPos = parseFloat(y).toFixed(4);
+            var zPos = parseFloat(z).toFixed(4);
             $('#mX').html(xPos);
             $('#mY').html(yPos);
             $('#mZ').html(zPos);

@@ -317,6 +317,7 @@ io.sockets.on('connection', function (appSocket) {
                     } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
                         var state = data.substring(1, data.search(/(,|\|)/));
                         //appSocket.emit('runStatus', state);
+                        io.sockets.emit('data', data);
 
                         // Extract wPos
                         var startWPos = data.search(/wpos:/i) + 5;
@@ -566,6 +567,7 @@ io.sockets.on('connection', function (appSocket) {
 
                 // Telnet connection events -----------------------------------------------
                 machineSocket.on('connect', function (prompt) {
+                    io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
                     isConnected = true;
@@ -660,7 +662,7 @@ io.sockets.on('connection', function (appSocket) {
                                 var wzpos = parseFloat(wpos[5]).toFixed(2);
                                 var wpos = wxpos + ',' + wypos + ',' + wzpos;
                                 writeLog('Telnet: ' + 'WPos:' + wpos, 1);
-                                io.sockets.emit('wpos', wpos);
+                                io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos});
                             }
                         } else if (data.indexOf('MCS:') >= 0) {
                             //console.log('Telnet:', response);
@@ -677,7 +679,7 @@ io.sockets.on('connection', function (appSocket) {
                                 var mzpos = parseFloat(mpos[5]).toFixed(2);
                                 var mpos = mxpos + ',' + mypos + ',' + mzpos;
                                 writeLog('Telnet: ' + 'MPos:' + mpos, 1);
-                                io.sockets.emit('mpos', mpos);
+                                io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos});
                             }
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                             switch (firmware) {
@@ -722,6 +724,7 @@ io.sockets.on('connection', function (appSocket) {
 
                 // ESP socket evnets -----------------------------------------------
                 machineSocket.on('open', function (e) {
+                    io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
                     machineSend(String.fromCharCode(0x18));
                     setTimeout(function() { //wait for controller to be ready
@@ -778,6 +781,7 @@ io.sockets.on('connection', function (appSocket) {
                             } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
                                 var state = data.substring(1, data.search(/(,|\|)/));
                                 //appSocket.emit('runStatus', state);
+                                io.sockets.emit('data', data);
 
                                 // Extract wPos
                                 var startWPos = data.search(/wpos:/i) + 5;
@@ -800,23 +804,9 @@ io.sockets.on('connection', function (appSocket) {
                                         send = true;
                                     }
                                     if (send) {
-                                        io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
                                     }
                                 }
-
-    //                            // Extract mPos
-    //                            var startMPos = data.search(/mpos:/i) + 5;
-    //                            var mPos;
-    //                            if (startMPos > 5) {
-    //                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
-    //                            }
-    //                            if (Array.isArray(mPos)) {
-    //                                xPos = parseFloat(mPos[0]).toFixed(4);
-    //                                yPos = parseFloat(mPos[1]).toFixed(4);
-    //                                zPos = parseFloat(mPos[2]).toFixed(4);
-    //                                appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
-    //                            }
-
                                 // Extract override values (for Grbl > v1.1 only!)
                                 var startOv = data.search(/ov:/i) + 3;
                                 if (startOv > 3) {
@@ -833,7 +823,6 @@ io.sockets.on('connection', function (appSocket) {
                                         }
                                     }
                                 }
-
                                 // Extract realtime Feed and Spindle (for Grbl > v1.1 only!)
                                 var startFS = data.search(/FS:/i) + 3;
                                 if (startFS > 3) {
@@ -847,7 +836,6 @@ io.sockets.on('connection', function (appSocket) {
                                         }
                                     }
                                 }
-
                             } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                                 firmware = 'grbl';
                                 fVersion = data.substr(5, 4); // get version
@@ -861,7 +849,6 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }, 250);
                             } else if (data.indexOf('LPC176') >= 0) { // LPC1768 or LPC1769 should be Smoothie
-                                writeLog('ESP: ' + data, 1);
                                 firmware = 'smoothie';
                                 //SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
                                 var startPos = data.search(/version:/i) + 9;
