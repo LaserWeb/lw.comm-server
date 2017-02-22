@@ -9,7 +9,7 @@
 3.  `git clone https://github.com/LaserWeb/lw.comm-server.git`
 4.  `git clone https://github.com/LaserWeb/LaserWeb4.git`
 5.  `cd LaserWeb4 && git fetch && git checkout dev_comms && npm install  --verbose && npm run installdev`
-6.  `cd .. && cd lw.comm-server && npm install --verbose`
+6.  `cd .. && cd lw.comm-server && git checkout electron_bundler && npm install --verbose`
 
 ### Prepare LW4 /dist
 1.  `cd LaserWeb4`
@@ -35,6 +35,7 @@ git fetch && git checkout dev_comms &&\
 npm install --verbose &&\
 npm run installdev &&\
 cd .. && cd lw.comm-server &&\
+git checkout electron_bundler &&\
 npm install --verbose &&\
 cd .. && cd LaserWeb4 &&\
 npm run bundle-dev &&\
