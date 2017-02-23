@@ -255,7 +255,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
-                    parser: serialport.parsers.readline('\r\n'),
+                    parser: serialport.parsers.readline('\n'),
                     baudrate: parseInt(data[2])
                 });
                 io.sockets.emit('connectStatus', 'opening:' + port.path);
@@ -268,9 +268,11 @@ io.sockets.on('connection', function (appSocket) {
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
+                            writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
                                     machineSend('$fb\n'); // Check if it's TinyG
+                                    writeLog('Sent: $fb', 2);
                                 }
                             }, 500);
                         }
@@ -399,6 +401,7 @@ io.sockets.on('connection', function (appSocket) {
                         statusLoop = setInterval(function () {
                             if (isConnected) {
                                 machineSend('?');
+                                //writeLog('Sent: ?', 2);
                             }
                         }, 250);
                     } else if (data.indexOf('LPC176') >= 0) { // LPC1768 or LPC1769 should be Smoothie
@@ -415,6 +418,7 @@ io.sockets.on('connection', function (appSocket) {
                         statusLoop = setInterval(function () {
                             if (isConnected) {
                                 machineSend('?');
+                                //writeLog('Sent: ?', 2);
                             }
                         }, 250);
                     } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
@@ -497,6 +501,7 @@ io.sockets.on('connection', function (appSocket) {
                             statusLoop = setInterval(function () {
                                 if (isConnected) {
                                     machineSend('{"sr":null}\n');
+                                    //writeLog('Sent: {"sr":null}', 2);
                                 }
                             }, 250);
                         }
@@ -728,12 +733,15 @@ io.sockets.on('connection', function (appSocket) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
                     machineSend(String.fromCharCode(0x18));
+                    writeLog('Sent: Code(0x18)', 2);
                     setTimeout(function() { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
+                            writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
                                     machineSend('$fb\n'); // Check if it's TinyG
+                                    writeLog('Sent: $fb', 2);
                                 }
                             }, 500);
                         }
@@ -945,6 +953,7 @@ io.sockets.on('connection', function (appSocket) {
                                     statusLoop = setInterval(function () {
                                         if (isConnected) {
                                             machineSend('{"sr":null}\n');
+                                            writeLog('Sent: {"sr":null}', 2);
                                         }
                                     }, 250);
                                 }
@@ -1098,22 +1107,28 @@ io.sockets.on('connection', function (appSocket) {
                 }
             }
             if (dir && dist && feed) {
+                writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
                 switch (firmware) {
                 case 'grbl':
                     addQ('$J=G91' + dir + dist + feed);
+                    send1Q();
                     break;
                 case 'smoothie':
                     addQ('G91');
                     addQ('G0' + feed + dir + dist);
                     addQ('G90');
+                    send1Q();
                     break;
                 case 'tinyg':
                     addQ('G91');
                     addQ('G0' + feed + dir + dist);
                     addQ('G90');
+                    send1Q();
+                    break;
+                default:
+                    writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
                     break;
                 }
-                send1Q();
             } else {
                 writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid job params!'), 1);
             }
@@ -1202,6 +1217,7 @@ io.sockets.on('connection', function (appSocket) {
                 if (code) {
                     //jumpQ(String.fromCharCode(parseInt(code)));
                     machineSend(String.fromCharCode(parseInt(code)));
+                    writeLog('Sent: Code(' + code + ')', 2);
                     writeLog(chalk.red('Feed Override ' + data + '%'), 1);
                 }
                 break;
@@ -1215,7 +1231,8 @@ io.sockets.on('connection', function (appSocket) {
                     }
                 }
                 //jumpQ('M220S' + feedOverride);
-                machineSend('M220S' + feedOverride);
+                machineSend('M220S' + feedOverride + '\n');
+                writeLog('Sent: M220S' + feedOverride, 2);
                 io.sockets.emit('feedOverride', feedOverride);
                 writeLog(chalk.red('Feed Override ' + feedOverride.toString() + '%'), 1);
                 //send1Q();
@@ -1258,6 +1275,7 @@ io.sockets.on('connection', function (appSocket) {
                 if (code) {
                     //jumpQ(String.fromCharCode(parseInt(code)));
                     machineSend(String.fromCharCode(parseInt(code)));
+                    writeLog('Sent: Code(' + code + ')', 2);
                     writeLog(chalk.red('Spindle (Laser) Override ' + data + '%'), 1);
                 }
                 break;
@@ -1271,7 +1289,8 @@ io.sockets.on('connection', function (appSocket) {
                     }
                 }
                 //jumpQ('M221S' + spindleOverride);
-                machineSend('M221S' + spindleOverride);
+                machineSend('M221S' + spindleOverride + '\n');
+                writeLog('Sent: M221S' + spindleOverride, 2);
                 io.sockets.emit('spindleOverride', spindleOverride);
                 writeLog(chalk.red('Spindle (Laser) Override ' + spindleOverride.toString() + '%'), 1);
                 //send1Q();
@@ -1384,16 +1403,20 @@ io.sockets.on('connection', function (appSocket) {
             switch (firmware) {
             case 'grbl':
                 machineSend('!'); // Send hold command
+                writeLog('Sent: !', 2);
                 if (fVersion === '1.1d') {
                     machineSend(String.fromCharCode(0x9E)); // Stop Spindle/Laser
+                    writeLog('Sent: Code(0x9E)', 2);
                 }
                 break;
             case 'smoothie':
                 machineSend('!'); // Laser will be turned off by smoothie (in default config!)
                 //machineSend('M600\n'); // Laser will be turned off by smoothie (in default config!)
+                writeLog('Sent: !', 2);
                 break;
             case 'tinyg':
                 machineSend('!'); // Send hold command
+                writeLog('Sent: !', 2);
                 break;
             }
             io.sockets.emit('runStatus', 'paused');
@@ -1411,12 +1434,16 @@ io.sockets.on('connection', function (appSocket) {
             switch (firmware) {
             case 'grbl':
                 machineSend('~'); // Send resume command
+                writeLog('Sent: ~', 2);
                 break;
             case 'smoothie':
-                machineSend('M601\n');
+                machineSend('~'); // Send resume command
+                //machineSend('M601\n');
+                writeLog('Sent: ~', 2);
                 break;
             case 'tinyg':
                 machineSend('~'); // Send resume command
+                writeLog('Sent: ~', 2);
                 break;
             }
             paused = false;
@@ -1447,8 +1474,10 @@ io.sockets.on('connection', function (appSocket) {
             switch (firmware) {
             case 'grbl':
                 machineSend('!'); // hold
+                writeLog('Sent: !', 2);
                 if (fVersion === '1.1d') {
                     machineSend(String.fromCharCode(0x9E)); // Stop Spindle/Laser
+                    writeLog('Sent: Code(0x9E)', 2);
                 }
                 writeLog('Cleaning Queue', 1);
                 gcodeQueue.length = 0; // Dump the Queye
@@ -1459,15 +1488,18 @@ io.sockets.on('connection', function (appSocket) {
                 queuePos = 0;
                 startTime = null;
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
+                writeLog('Sent: Code(0x18)', 2);
                 blocked = false;
                 paused = false;
                 break;
             case 'smoothie':
                 paused = true;
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
+                writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'tinyg':
                 machineSend('!'); // hold
+                writeLog('Sent: !', 2);
 //                    machineSend('%'); // dump TinyG queue
                 break;
             }
@@ -1482,8 +1514,8 @@ io.sockets.on('connection', function (appSocket) {
             laserTestOn = false;
             startTime = null;
             runningJob = null;
-//            blocked = false;
-//            paused = false;
+            blocked = false;
+            paused = false;
             io.sockets.emit('runStatus', 'stopped');
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1501,12 +1533,15 @@ io.sockets.on('connection', function (appSocket) {
                 switch (firmware) {
                 case 'grbl':
                     machineSend('$X\n');
+                    writeLog('Sent: $X', 2);
                     break;
                 case 'smoothie':
                     machineSend('$X\n');
+                    writeLog('Sent: $X', 2);
                     break;
                 case 'tinyg':
                     machineSend('$X\n'); // resume
+                    writeLog('Sent: $X', 2);
                     break;
                 }
                 writeLog('Resuming Queue Lockout', 1);
@@ -1524,17 +1559,21 @@ io.sockets.on('connection', function (appSocket) {
                 switch (firmware) {
                 case 'grbl':
                     machineSend('$X\n');
+                    writeLog('Sent: $X', 2);
                     blocked = false;
                     paused = false;
                     break;
                 case 'smoothie':
                     machineSend('$X\n'); //M999
+                    writeLog('Sent: $X', 2);
                     blocked = false;
                     paused = false;
                     break;
                 case 'tinyg':
                     machineSend('%'); // flush tinyg quere
+                    writeLog('Sent: %', 2);
                     machineSend('~'); // resume
+                    writeLog('Sent: ~', 2);
                     blocked = false;
                     paused = false;
                     break;
@@ -1555,12 +1594,15 @@ io.sockets.on('connection', function (appSocket) {
             switch (firmware) {
             case 'grbl':
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
+                writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'smoothie':
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
+                writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'tinyg':
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
+                writeLog('Sent: Code(0x18)', 2);
                 break;
             }
         } else {
@@ -1752,18 +1794,19 @@ function send1Q() {
             speed = (queuePointer / elapsedTime).toFixed(0);
             writeLog('Done: ' + queuePointer + ' of ' + queueLen + ' (ave. ' + speed + ' lines/s)', 1);
         }
-        if (startTime && (queuePointer >= gcodeQueue.length)) {
+        if (queuePointer >= gcodeQueue.length) {
             clearInterval(queueCounter);
             io.sockets.emit('qCount', 0);
-            finishTime = new Date(Date.now());
-            elapsedTimeMS = finishTime.getTime() - startTime.getTime();
-            elapsedTime = Math.round(elapsedTimeMS / 1000);
-            speed = (queuePointer / elapsedTime).toFixed(0);
-            writeLog("Job started at " + startTime.toString(), 1);
-            writeLog("Job finished at " + finishTime.toString(), 1);
-            writeLog("Elapsed time: " + elapsedTime + " seconds.", 1);
-            writeLog('Ave. Speed: ' + speed + ' lines/s', 1);
-
+            if (startTime) {
+                finishTime = new Date(Date.now());
+                elapsedTimeMS = finishTime.getTime() - startTime.getTime();
+                elapsedTime = Math.round(elapsedTimeMS / 1000);
+                speed = (queuePointer / elapsedTime).toFixed(0);
+                writeLog("Job started at " + startTime.toString(), 1);
+                writeLog("Job finished at " + finishTime.toString(), 1);
+                writeLog("Elapsed time: " + elapsedTime + " seconds.", 1);
+                writeLog('Ave. Speed: ' + speed + ' lines/s', 1);
+            }
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
             tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
