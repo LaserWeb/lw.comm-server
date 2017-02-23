@@ -39,8 +39,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dist": "npm run copy && build",
+    "distmac": "npm run copy && build --mac ",
     "release": "npm run copy && build",
-    "copy": "ncp ../LaserWeb4/dist/ app/lw4/ --limit=6"
+    "copy": "ncp ../LaserWeb4/dist/ app/lw4/ --limit=6",
+    "postinstall": "install-app-deps"
   },
   "keywords": [
     "laserweb",
