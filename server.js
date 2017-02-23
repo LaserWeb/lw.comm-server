@@ -1835,7 +1835,7 @@ if (electronApp) {
           mainWindow.show()
         })
         mainWindow.maximize()
-        // mainWindow.webContents.openDevTools()
+        mainWindow.webContents.openDevTools()
     };
 
     electronApp.commandLine.appendSwitch("--ignore-gpu-blacklist");
