@@ -59,7 +59,7 @@
   "build": {
     "appId": "xyz.laserweb",
     "productName": "LaserWeb",
-    "asar": false,
+    "asar": true,
     "files": [
       "**/*"
     ],
@@ -82,6 +82,6 @@
           "type": "file"
         }
       ]
-    }  
+    }
   }
 }
