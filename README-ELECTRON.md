@@ -43,3 +43,11 @@ cd .. && cd lw.comm-server &&\
 ./node_modules/.bin/electron-rebuild &&\
 npm run dist
 ```
+
+## Subsequent Updates
+
+1.  `cd LaserWeb4 && git pull && npm run installdev && npm run install`
+2.  `npm run bundle-dev`
+3.  `cd ../lw.comm-server && git pull && npm install`
+4. `./node_modules/.bin/electron-rebuild`
+5.  `npm run dist`
