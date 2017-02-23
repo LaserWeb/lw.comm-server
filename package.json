@@ -31,8 +31,9 @@
   "homepage": "https://github.com/LaserWeb/lw.comm-server#readme",
   "main": "server.js",
   "devDependencies": {
-    "electron": "^1.6.1",
     "copyfiles": "^1.2.0",
+    "electron": "^1.6.1",
+    "electron-builder": "^14.1.1",
     "electron-rebuild": "^1.5.7",
     "ncp": "^2.0.0"
   },
