@@ -41,7 +41,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dist": "npm run copy && build",
     "distmac": "npm run copy && build --mac ",
-    "release": "npm run copy && build",
+    "distx86": "npm run copy && build --win --ia32 ",
+    "distx64": "npm run copy && build --win --x64",
+    "distlinux": "npm run copy && build --linux deb tar.xz ",
     "copy": "ncp ../LaserWeb4/dist/ app/lw4/ --limit=6"
   },
   "keywords": [
@@ -56,7 +58,7 @@
     "gateway",
     "ESP8266"
   ],
-  "author": "Claudio Prezzi",
+  "author": "github.com/LaserWeb",
   "build": {
     "appId": "xyz.laserweb",
     "productName": "LaserWeb",
