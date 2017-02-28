@@ -605,6 +605,21 @@ io.sockets.on('connection', function (appSocket) {
                         }
                     }, 250);
 
+                    setTimeout(function () {
+                        // Close port if we don't detect supported firmware after 2s.
+                        if (!firmware) {
+                            writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
+                            io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
+                            io.sockets.emit('connectStatus', 'closing:' + connectedTo);
+                            gcodeQueue.length = 0; // dump the queye
+                            grblBufferSize.length = 0; // dump bufferSizes
+                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                            clearInterval(queueCounter);
+                            clearInterval(statusLoop);
+                            machineSocket.destroy();
+                        }
+                    }, 2000);
+
                     // Start interval for qCount messages to appSocket clients
                     queueCounter = setInterval(function () {
                         io.sockets.emit('qCount', gcodeQueue.length);
@@ -747,7 +762,11 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    machineSend(String.fromCharCode(0x18));
+                    writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connected @ ' + connectedIp), 1);
+                    isConnected = true;
+                    connectedTo = connectedIp;
+                    //machineSend(String.fromCharCode(0x18));
+
                     setTimeout(function() { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
@@ -762,9 +781,21 @@ io.sockets.on('connection', function (appSocket) {
                     }, 500);
                     // machineSend("M115\n");    // Lets check if its Marlin?
 
-                    writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connected @ ' + connectedIp), 1);
-                    isConnected = true;
-                    connectedTo = connectedIp;
+                    setTimeout(function () {
+                        // Close port if we don't detect supported firmware after 2s.
+                        if (!firmware) {
+                            writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
+                            io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
+                            io.sockets.emit('connectStatus', 'closing:' + connectedTo);
+                            gcodeQueue.length = 0; // dump the queye
+                            grblBufferSize.length = 0; // dump bufferSizes
+                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                            clearInterval(queueCounter);
+                            clearInterval(statusLoop);
+                            machineSocket.close();
+                        }
+                    }, 2000);
+
                 });
 
                 machineSocket.on('close', function (e) {
