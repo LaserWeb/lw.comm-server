@@ -251,6 +251,7 @@ io.sockets.on('connection', function (appSocket) {
         writeLog(chalk.yellow('INFO: ') + chalk.blue('Connecting to ' + data), 1);
         if (!isConnected) {
             connectionType = data[0].toLowerCase();
+            firmware = false;
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
@@ -264,6 +265,7 @@ io.sockets.on('connection', function (appSocket) {
                     io.sockets.emit('activePort', {port: port.path, baudrate: port.options.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
                     //machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for grbl-lpc)
+                    machineSend('\n'); // this causes smoothie to send the welcome string
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
@@ -276,6 +278,20 @@ io.sockets.on('connection', function (appSocket) {
                             }, 500);
                         }
                     }, 500);
+                    setTimeout(function () {
+                        // Close port if we don't detect supported firmware after 2s.
+                        if (!firmware) {
+                            writeLog('No supported firmware detected. Closing port ' + port.path, 1);
+                            io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
+                            io.sockets.emit('connectStatus', 'closing:' + port.path);
+                            gcodeQueue.length = 0; // dump the queye
+                            grblBufferSize.length = 0; // dump bufferSizes
+                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                            clearInterval(queueCounter);
+                            clearInterval(statusLoop);
+                            port.close();
+                        }
+                    }, 2000);
                     // machineSend("M115\n");    // Lets check if its Marlin?
 
                     writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
@@ -732,7 +748,6 @@ io.sockets.on('connection', function (appSocket) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
                     machineSend(String.fromCharCode(0x18));
-                    writeLog('Sent: Code(0x18)', 2);
                     setTimeout(function() { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
@@ -774,7 +789,7 @@ io.sockets.on('connection', function (appSocket) {
 
                 machineSocket.on('message', function (msg) {
                     espBuffer += msg;
-                    var split = espBuffer.split('\n');
+                    var split = espBuffer.split(/\n/);
                     espBuffer = split.pop();
                     for (var i = 0; i < split.length; i++) {
                         var data = split[i];
@@ -856,6 +871,9 @@ io.sockets.on('connection', function (appSocket) {
                                         machineSend('?');
                                     }
                                 }, 250);
+                            } else if (data.indexOf('Smoothie') >= 0) { // Check if we got smoothie welcome message
+                                firmware = 'smoothie';
+                                writeLog('Smoothieware detected, asking for version', 2);
                             } else if (data.indexOf('LPC176') >= 0) { // LPC1768 or LPC1769 should be Smoothie
                                 firmware = 'smoothie';
                                 //SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
