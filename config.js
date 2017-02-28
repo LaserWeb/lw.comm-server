@@ -6,9 +6,9 @@ config.webPort = process.env.WEB_PORT || 8000;
 config.serverVersion = '4.0.36'
 config.apiVersion = '4.0.1';
 
-config.verboseLevel = 1;
-config.logLevel = 0;
+config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
+config.logLevel = process.env.LOG_LEVEL || 0;
 
-config.posDecimals = 2;
+config.posDecimals = process.env.DRO_DECIMALS || 2;
 
 module.exports = config;

@@ -1572,11 +1572,12 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('clearAlarm', function (data) { // Laser Test Fire
+    appSocket.on('clearAlarm', function (data) { // Clear Alarm
         if (isConnected) {
+            data = parseInt(data);
             writeLog('Clearing Queue: Method ' + data, 1);
             switch (data) {
-            case '1':
+            case 1:
                 writeLog('Clearing Lockout');
                 switch (firmware) {
                 case 'grbl':
@@ -1594,7 +1595,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 writeLog('Resuming Queue Lockout', 1);
                 break;
-            case '2':
+            case 2:
                 writeLog('Emptying Queue', 1);
                 gcodeQueue.length = 0; // Dump the Queye
                 grblBufferSize.length = 0; // Dump bufferSizes
