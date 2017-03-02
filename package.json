@@ -1,6 +1,6 @@
 {
   "name": "lw.comm-server",
-  "version": "4.0.40",
+  "version": "4.0.42",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "contributors": [
     "Claudio Prezzi <claudio.prezzi@gmail.com>"

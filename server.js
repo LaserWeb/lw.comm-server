@@ -88,9 +88,9 @@ var xPos = 0, yPos = 0, zPos = 0;
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
-    writeLog(chalk.white('                 ---- LaserWeb Comm Server ----                '), 0);
+    writeLog(chalk.white('        ---- LaserWeb Comm Server ' + config.serverVersion + ' ----        '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
-    writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort + ' to connect this server.'), 0);
+    writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
     writeLog(chalk.green('***************************************************************'));
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.red('* Updates: '), 0);
