@@ -68,7 +68,7 @@ var readyToSend = true;
 
 var optimizeGcode = false;
 
-var supportedInterfaces = ['USB', 'ESP8266']; //, 'Telnet'];
+var supportedInterfaces = ['USB', 'ESP8266', 'Telnet'];
 
 var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
 var grblBufferSize = [];
