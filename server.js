@@ -168,7 +168,7 @@ io.sockets.on('connection', function (appSocket) {
     }
 
     appSocket.on('firstLoad', function () {
-        writeLog(chalk.yellow('INFO: ') + chalk.blue('Firstload called'), 1);
+        writeLog(chalk.yellow('INFO: ') + chalk.blue('FirstLoad called'), 1);
         appSocket.emit('serverConfig', config);
         appSocket.emit('interfaces', supportedInterfaces);
         serialport.list(function (err, ports) {
@@ -197,6 +197,11 @@ io.sockets.on('connection', function (appSocket) {
         } else {
             appSocket.emit('connectStatus', 'Connect');
         }
+    });
+
+    appSocket.on('getServerConfig', function () { // Deliver config of server (incl. versions)
+        writeLog(chalk.yellow('INFO: ') + chalk.blue('Requesting Server Config '), 1);
+        appSocket.emit('serverConfig', config);
     });
 
     appSocket.on('getInterfaces', function () { // Deliver supported Interfaces
