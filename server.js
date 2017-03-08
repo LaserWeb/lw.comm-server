@@ -2016,7 +2016,7 @@ if (electronApp) {
           mainWindow.show()
         })
         mainWindow.maximize()
-        mainWindow.webContents.openDevTools()
+        //mainWindow.webContents.openDevTools() // Enable when testing 
     };
 
     electronApp.commandLine.appendSwitch("--ignore-gpu-blacklist");
