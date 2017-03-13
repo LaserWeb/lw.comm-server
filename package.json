@@ -45,7 +45,7 @@
     "distx64": "npm run copy && build --win --x64",
     "distlinux": "npm run copy && build --linux deb tar.xz ",
     "copy": "ncp ../LaserWeb4/dist/ app/lw4/ --limit=6",
-    "nightly": "cd .. && cd LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win64/ && cd .. && npm run distx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win32/ && cd ../../LaserWeb4-Binaries && git add -A && git commit -m \"Nightly `date`\" && git push origin master"
+    "nightly": "cd .. && cd LaserWeb4-Binaries && git pull && cd .. && cd LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win64/ && cd .. && npm run distx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win32/ && cd ../../LaserWeb4-Binaries && git add -A && git commit -m \"Nightly\" && git push origin master"
   },
   "keywords": [
     "laserweb",
