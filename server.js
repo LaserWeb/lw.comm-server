@@ -2003,7 +2003,7 @@ if (electronApp) {
         mainWindow = new BrowserWindow({width: 1200, height: 900, fullscreen: false, center: true, resizable: true, title: "LaserWeb", frame: true, autoHideMenuBar: true, icon: '/public/favicon.png' });
 
         // and load the index.html of the app.
-        mainWindow.loadURL('http://127.0.0.1:8000/lw4');
+        mainWindow.loadURL('http://127.0.0.1:8000');
 
         // Emitted when the window is closed.
         mainWindow.on('closed', function () {
