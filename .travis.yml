@@ -1,0 +1,16 @@
+language: node_js
+node_js:
+  - "7"
+before_install:
+  - sudo apt-get install --no-install-recommends -y icnsutils graphicsmagick xz-utils
+  - git clone https://github.com/LaserWeb/LaserWeb4.git
+  - cd LaserWeb4
+  - git checkout dev-es6
+  - npm install --verbose
+  - npm run installdev
+  - npm run bundle-dev
+  - ./node_modules/.bin/electron-rebuild
+  - npm run dist
+branches:
+  only:
+    - electron_bundler
