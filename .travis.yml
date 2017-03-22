@@ -19,7 +19,9 @@ before_install:
 branches:
   only:
     - electron_bundler
+after_success:
+  - rm -rf node_modules
+  - rm -rf dist/linux-unpacked
+  - rm -rf app
 addons:
   artifacts: true
-  paths:
-    - $(ls dist/*.AppImage | tr "\n" ":")
