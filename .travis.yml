@@ -9,6 +9,7 @@ before_install:
   - npm install
   - npm run installdev
   - npm run bundle-dev
+  - cd ../
   - ./node_modules/.bin/electron-rebuild
   - npm run dist
 branches:
