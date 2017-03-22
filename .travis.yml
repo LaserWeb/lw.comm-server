@@ -19,3 +19,5 @@ before_install:
 branches:
   only:
     - electron_bundler
+addons:
+  artifacts: true

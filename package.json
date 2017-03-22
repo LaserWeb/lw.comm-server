@@ -39,7 +39,7 @@
   },
   "scripts": {
     "start": "echo \"Please run 'npm run dist' to create a local installer, or run 'npm run nightlylinux' or 'npm run nightlywindows' to build distributable installers for each platform\" ",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"Error: no test specified\" && exit 0",
     "dist": "npm run copy && build",
     "distmac": "npm run copy && build --mac ",
     "distwinx86": "npm run copy && build --win --ia32 ",
