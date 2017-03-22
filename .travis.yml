@@ -6,7 +6,7 @@ before_install:
   - git clone https://github.com/LaserWeb/LaserWeb4.git
   - cd LaserWeb4
   - git checkout dev-es6
-  - npm install --verbose
+  - npm install
   - npm run installdev
   - npm run bundle-dev
   - ./node_modules/.bin/electron-rebuild
