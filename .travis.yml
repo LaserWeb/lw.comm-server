@@ -1,6 +1,8 @@
 language: node_js
 node_js:
   - "7"
+sudo: required
+dist: trusty
 before_install:
   - sudo apt-get install --no-install-recommends -y icnsutils graphicsmagick xz-utils
   - git clone https://github.com/LaserWeb/LaserWeb4.git
