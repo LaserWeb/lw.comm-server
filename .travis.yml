@@ -21,3 +21,5 @@ branches:
     - electron_bundler
 addons:
   artifacts: true
+  paths:
+    - $(ls dist/*.AppImage | tr "\n" ":")
