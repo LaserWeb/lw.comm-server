@@ -84,6 +84,15 @@ var jsObject;
 
 var xPos = 0, yPos = 0, zPos = 0;
 
+//Cartesian to Polar Transformation
+var W = 795;
+var X = 290;
+var Y = 240;
+var A = (Math.sqrt(Math.pow(X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
+var B = (Math.sqrt(Math.pow(W-X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
+var lastX = false, lastY = false;
+var polarTransformation = true;     // transform x/y to a/b for polargraph
+
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
@@ -363,6 +372,12 @@ io.sockets.on('connection', function (appSocket) {
                                 send = true;
                             }
                             if (send) {
+								if (polarTransformation) {
+									writeLog('cartesianTransform(' + xPos + ',' + yPos + ')', 1);
+									var xy = cartesianTransform(xPos, yPos);
+									xPos = xy.x;
+									yPos = xy.y;
+								}
                                 io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
                             }
                         }
@@ -1183,7 +1198,22 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }
-                        //console.log(line);
+                        if(polarTransformation) {
+                            writeLog('Before: ' + tosend, 1);
+                            if (tosend.indexOf('X') >= 0) {
+                                lastX = parseFloat(tosend.substr(tosend.indexOf('X')+1));
+                            }
+                            if (tosend.indexOf('Y') >= 0) {
+                                lastY = parseFloat(tosend.substr(tosend.indexOf('Y')+1));
+                            }
+                            if (tosend.indexOf('X') >= 0 || tosend.indexOf('Y') >= 0) {
+                                var point = polarTransform(lastX, lastY);
+                                writeLog('polarTransform(' + lastX + ', ' + lastY + ') = ' + point.x + '/' + point.y, 1);
+                                tosend = tosend.replace('X'+lastX, 'X'+point.x);
+                                tosend = tosend.replace('Y'+lastY, 'Y'+point.y);
+                            }
+                            writeLog('After: ' + tosend, 1);
+                        }
                         addQ(tosend);
                     }
                 }
@@ -1213,6 +1243,21 @@ io.sockets.on('connection', function (appSocket) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
                     var tosend = line[0].trim();
                     if (tosend.length > 0) {
+                        if(polarTransformation) {
+                            writeLog(tosend, 1);
+                            if (tosend.indexOf('X') >= 0) {
+                                lastX = parseFloat(tosend.substr(tosend.indexOf('X')+1));
+                            }
+                            if (tosend.indexOf('Y') >= 0) {
+                                lastY = parseFloat(tosend.substr(tosend.indexOf('Y')+1));
+                            }
+                            if (tosend.indexOf('X') >= 0 || tosend.indexOf('Y') >= 0) {
+                                var point = polarTransform(lastX, lastY);
+                                writeLog('polarTransform(' + lastX + ', ' + lastY + ') = ' + point.x + '/' + point.y, 1);
+                                tosend = tosend.replace('X'+lastX, 'X'+point.x);
+                                tosend = tosend.replace('Y'+lastY, 'Y'+point.y);
+                            }
+                        }
                         addQ(tosend);
                     }
                 }
@@ -1982,4 +2027,32 @@ function writeLog(line, verb) {
         line = line.split(String.fromCharCode(0x1B) + '[94m').join('');
         logFile.write(time + ' ' + line + '\r\n');
     }
+}
+
+function polarTransform(x, y) {
+    var a = Math.sqrt(Math.pow(X+x, 2) + Math.pow(Y-y, 2)) - A;
+    var b = Math.sqrt(Math.pow(W-X-x, 2) + Math.pow(Y-y, 2)) - B;
+    return {x:a.toFixed(config.posDecimals), y:b.toFixed(config.posDecimals)};
+}
+
+function cartesianTransform(a, b) {
+	var rad = 180 / Math.PI;
+	writeLog('Params: ' + a + ', ' + b + ', ' + A + ', ' + B + ', ' + X + ', ' + Y + ', ' + W, 1);
+	var Bb = parseFloat(B) - parseFloat(b);
+	//writeLog('Bb=' + Bb, 1);
+	var Bb2 = Math.pow(Bb, 2);
+	//writeLog('Bb2=' + Bb2, 1);
+	var W2 = Math.pow(W, 2);
+	//writeLog('W2=' + W2, 1);
+	var aA = parseFloat(a) + parseFloat(A);
+	//writeLog('aA=' + aA, 1);
+	var aA2 = Math.pow(aA, 2);
+	//writeLog('aA2=' + aA2, 1);
+	var cosA = (aA2 + W2 - Bb2) / ( 2 * aA * W);
+	writeLog('cosAlpha=' + cosA, 1);
+	writeLog('Alpha=' + Math.acos(cosA) * rad, 1);
+    var x = cosA * aA - X;
+    var y = Y - Math.sin(Math.acos(cosA)) * aA;
+	writeLog('x=' + x.toFixed(config.posDecimals) + ', y=' + y.toFixed(config.posDecimals), 1);
+    return {x:x.toFixed(config.posDecimals), y:y.toFixed(config.posDecimals)};
 }
