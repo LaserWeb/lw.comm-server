@@ -5,6 +5,7 @@ sudo: required
 dist: trusty
 before_install:
   - sudo apt-get install --no-install-recommends -y icnsutils graphicsmagick xz-utils
+  - sudo apt-get install libstdc++6
   - sudo dpkg --add-architecture i386
   - sudo add-apt-repository ppa:ubuntu-wine/ppa -y
   - sudo apt-get update -q
