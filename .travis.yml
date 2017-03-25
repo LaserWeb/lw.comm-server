@@ -9,6 +9,7 @@ before_install:
   - sudo add-apt-repository ppa:ubuntu-wine/ppa -y
   - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
   - sudo apt-get update -qq
+  - sudo dpkg --get-selections | grep postgres
   - sudo apt-mark hold postgresql
   - sudo apt-get dist-upgrade -yqq
   - sudo apt-get install --no-install-recommends -yqq wine1.8
