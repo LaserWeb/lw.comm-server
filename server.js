@@ -85,9 +85,9 @@ var jsObject;
 var xPos = 0, yPos = 0, zPos = 0;
 
 //Cartesian to Polar Transformation
-var W = 795;
-var X = 290;
-var Y = 240;
+var W = 795;    // distance of motors
+var X = 290;    // gondula origin x distance from left motor
+var Y = 240;    // gondula origin y distance from left motor
 var A = (Math.sqrt(Math.pow(X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
 var B = (Math.sqrt(Math.pow(W-X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
 var lastX = false, lastY = false;
