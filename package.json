@@ -2,19 +2,21 @@
   "name": "lw.comm-server",
   "version": "4.0.45",
   "description": "Unified communications server for LaserWeb/CNCweb",
+  "author": "Claudio Prezzi",
   "contributors": [
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
   ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
-  },
+  "license": "AGPL-3.0",
   "licenses": [
     {
       "type": "AGPL-3.0",
       "url": "http://www.gnu.org/licenses/agpl-3.0.txt"
     }
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
+  },
   "dependencies": {
     "chalk": "*",
     "dotenv": "*",
@@ -24,14 +26,15 @@
     "socket.io": "*",
     "ws": "^1.1.1"
   },
-  "license": "AGPL-3.0",
+  "devDependencies": {},
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
   },
   "homepage": "https://github.com/LaserWeb/lw.comm-server#readme",
   "main": "server.js",
-  "devDependencies": {},
   "scripts": {
+    "start": "node server.js",
+    "update_lw4": "ncp ../LaserWeb4/dist/ app/ --limit=6",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -45,6 +48,5 @@
     "ethernet",
     "gateway",
     "ESP8266"
-  ],
-  "author": "Claudio Prezzi"
+  ]
 }
