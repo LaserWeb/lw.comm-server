@@ -3,18 +3,23 @@
   "version": "4.0.48",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "contributors": [
+    "Peter van der Walt <peter.plaaswerf@gmail.com>",
+    "Sébastien Mischler <sebastien@onlfait.ch>",
+    "Todd Fleming <jscut.org>",
+    "Jorge Robles <jorge.diego.robles@gmail.com>",
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
   ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
-  },
+  "license": "AGPL-3.0",
   "licenses": [
     {
       "type": "AGPL-3.0",
       "url": "http://www.gnu.org/licenses/agpl-3.0.txt"
     }
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
+  },
   "dependencies": {
     "chalk": "*",
     "dotenv": "*",
@@ -24,7 +29,7 @@
     "socket.io": "*",
     "ws": "^1.1.1"
   },
-  "license": "AGPL-3.0",
+  "devDependencies": {},
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
   },
