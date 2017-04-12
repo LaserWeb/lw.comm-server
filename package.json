@@ -1,7 +1,8 @@
 {
   "name": "lw.comm-server",
-  "version": "4.0.48",
+  "version": "4.0.50",
   "description": "Unified communications server for LaserWeb/CNCweb",
+  "author": "Claudio Prezzi",
   "contributors": [
     "Peter van der Walt <peter.plaaswerf@gmail.com>",
     "Sébastien Mischler <sebastien@onlfait.ch>",
@@ -25,7 +26,7 @@
     "dotenv": "*",
     "node-static": "*",
     "request": "*",
-    "serialport": "*",
+    "serialport": "^4.0.7",
     "socket.io": "*",
     "ws": "^1.1.1"
   },

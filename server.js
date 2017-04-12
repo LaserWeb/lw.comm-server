@@ -278,7 +278,7 @@ io.sockets.on('connection', function (appSocket) {
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
-                                    machineSend('$fb\n'); // Check if it's TinyG
+                                    machineSend('{"fb":""}\n'); // Check if it's TinyG
                                     writeLog('Sent: $fb', 2);
                                 }
                             }, 500);
