@@ -86,6 +86,16 @@ var xPos = 0, yPos = 0, zPos = 0;
 
 const path = require('path');
 
+//Cartesian to Polar Transformation
+var W = 795;
+var X = 290;
+var Y = 240;
+var A = (Math.sqrt(Math.pow(X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
+var B = (Math.sqrt(Math.pow(W-X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
+var lastX = false, lastY = false;
+var polarTransformation = false;     // transform x/y to a/b for polargraph
+
+
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
@@ -364,6 +374,12 @@ io.sockets.on('connection', function (appSocket) {
                                 send = true;
                             }
                             if (send) {
+								if (polarTransformation) {
+									writeLog('cartesianTransform(' + xPos + ',' + yPos + ')', 1);
+									var xy = cartesianTransform(xPos, yPos);
+									xPos = xy.x;
+									yPos = xy.y;
+								}
                                 io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
                             }
                         }
@@ -1184,7 +1200,22 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }
-                        //console.log(line);
+                        if (polarTransformation) {
+                            writeLog('Before: ' + tosend, 1);
+                            if (tosend.indexOf('X') >= 0) {
+                                lastX = parseFloat(tosend.substr(tosend.indexOf('X')+1));
+                            }
+                            if (tosend.indexOf('Y') >= 0) {
+                                lastY = parseFloat(tosend.substr(tosend.indexOf('Y')+1));
+                            }
+                            if (tosend.indexOf('X') >= 0 || tosend.indexOf('Y') >= 0) {
+                                var point = polarTransform(lastX, lastY);
+                                writeLog('polarTransform(' + lastX + ', ' + lastY + ') = ' + point.x + '/' + point.y, 1);
+                                tosend = tosend.replace('X'+lastX, 'X'+point.x);
+                                tosend = tosend.replace('Y'+lastY, 'Y'+point.y);
+                            }
+                            writeLog('After: ' + tosend, 1);
+                        }
                         addQ(tosend);
                     }
                 }
@@ -1214,6 +1245,21 @@ io.sockets.on('connection', function (appSocket) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
                     var tosend = line[0].trim();
                     if (tosend.length > 0) {
+                        if(polarTransformation) {
+                            writeLog(tosend, 1);
+                            if (tosend.indexOf('X') >= 0) {
+                                lastX = parseFloat(tosend.substr(tosend.indexOf('X')+1));
+                            }
+                            if (tosend.indexOf('Y') >= 0) {
+                                lastY = parseFloat(tosend.substr(tosend.indexOf('Y')+1));
+                            }
+                            if (tosend.indexOf('X') >= 0 || tosend.indexOf('Y') >= 0) {
+                                var point = polarTransform(lastX, lastY);
+                                writeLog('polarTransform(' + lastX + ', ' + lastY + ') = ' + point.x + '/' + point.y, 1);
+                                tosend = tosend.replace('X'+lastX, 'X'+point.x);
+                                tosend = tosend.replace('Y'+lastY, 'Y'+point.y);
+                            }
+                        }
                         addQ(tosend);
                     }
                 }
@@ -1985,6 +2031,36 @@ function writeLog(line, verb) {
     }
 }
 
+function polarTransform(x, y) {
+    var a = Math.sqrt(Math.pow(X+x, 2) + Math.pow(Y-y, 2)) - A;
+    var b = Math.sqrt(Math.pow(W-X-x, 2) + Math.pow(Y-y, 2)) - B;
+    return {x:a.toFixed(config.posDecimals), y:b.toFixed(config.posDecimals)};
+}
+
+function cartesianTransform(a, b) {
+	var rad = 180 / Math.PI;
+	writeLog('Params: ' + a + ', ' + b + ', ' + A + ', ' + B + ', ' + X + ', ' + Y + ', ' + W, 1);
+	var Bb = parseFloat(B) - parseFloat(b);
+	//writeLog('Bb=' + Bb, 1);
+	var Bb2 = Math.pow(Bb, 2);
+	//writeLog('Bb2=' + Bb2, 1);
+	var W2 = Math.pow(W, 2);
+	//writeLog('W2=' + W2, 1);
+	var aA = parseFloat(a) + parseFloat(A);
+	//writeLog('aA=' + aA, 1);
+	var aA2 = Math.pow(aA, 2);
+	//writeLog('aA2=' + aA2, 1);
+	var cosA = (aA2 + W2 - Bb2) / ( 2 * aA * W);
+	writeLog('cosAlpha=' + cosA, 1);
+	writeLog('Alpha=' + Math.acos(cosA) * rad, 1);
+    var x = cosA * aA - X;
+    var y = Y - Math.sin(Math.acos(cosA)) * aA;
+	writeLog('x=' + x.toFixed(config.posDecimals) + ', y=' + y.toFixed(config.posDecimals), 1);
+    return {x:x.toFixed(config.posDecimals), y:y.toFixed(config.posDecimals)};
+}
+
+
+
 // Electron app
 const electron = require('electron');
 // Module to control application life.
@@ -2057,63 +2133,3 @@ if (electronApp) {
         }
     });
 }
-
-/*
-// Module to control application life.
-const electronApp = electron.app;
-if (electronApp) {
-    // Module to create native browser window.
-    const BrowserWindow = electron.BrowserWindow;
-
-    // Keep a global reference of the window object, if you don't, the window will
-    // be closed automatically when the JavaScript object is garbage collected.
-    var mainWindow;
-
-    function createWindow() {
-        // Create the browser window.
-        mainWindow = new BrowserWindow({width: 1200, height: 900, fullscreen: false, center: true, resizable: true, title: "LaserWeb", frame: true, autoHideMenuBar: true, icon: '/public/favicon.png' });
-
-        // and load the index.html of the app.
-        mainWindow.loadURL('http://127.0.0.1:8000');
-
-        // Emitted when the window is closed.
-        mainWindow.on('closed', function () {
-            // Dereference the window object, usually you would store windows
-            // in an array if your app supports multi windows, this is the time
-            // when you should delete the corresponding element.
-            mainWindow = null;
-        });
-        mainWindow.once('ready-to-show', () => {
-          mainWindow.show()
-        })
-        mainWindow.maximize()
-        //mainWindow.webContents.openDevTools() // Enable when testing 
-    };
-
-    electronApp.commandLine.appendSwitch("--ignore-gpu-blacklist");
-    electronApp.commandLine.appendSwitch("--disable-http-cache");
-    // This method will be called when Electron has finished
-    // initialization and is ready to create browser windows.
-    // Some APIs can only be used after this event occurs.
-
-
-    electronApp.on('ready', createWindow);
-
-    // Quit when all windows are closed.
-    electronApp.on('window-all-closed', function () {
-        // On OS X it is common for applications and their menu bar
-        // to stay active until the user quits explicitly with Cmd + Q
-        if (process.platform !== 'darwin') {
-            electronApp.quit();
-        }
-    });
-
-    electronApp.on('activate', function () {
-        // On OS X it's common to re-create a window in the app when the
-        // dock icon is clicked and there are no other windows open.
-        if (mainWindow === null) {
-            createWindow();
-        }
-    });
-}
-*/
