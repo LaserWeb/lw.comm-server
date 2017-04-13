@@ -484,22 +484,22 @@ io.sockets.on('connection', function (appSocket) {
                             if (jsObject.hasOwnProperty('sr')) {    // position
                                 writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
                                 //var jsObject = JSON.parse(data);
-                                var send = true;
-                                if (jsObject.sr.posx) {
+                                var send = false;
+                                if (jsObject.sr.posx != null) {
                                     xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
                                     send = true;
                                 }
-                                if (jsObject.sr.posy) {
+                                if (jsObject.sr.posy != null) {
                                     yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
                                     send = true;
                                 }
-                                if (jsObject.sr.posz) {
+                                if (jsObject.sr.posz != null) {
                                     zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
                                     send = true;
                                 }
                                 if (send) {
                                     io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
-                                    //writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos, 3);
+                                    writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos, 3);
                                 }
                             }
 
