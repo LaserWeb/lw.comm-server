@@ -277,8 +277,8 @@ io.sockets.on('connection', function (appSocket) {
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
-                                    machineSend('{"fb":""}\n'); // Check if it's TinyG
-                                    writeLog('Sent: {"fb":""}', 2);
+                                    machineSend('{fb:n}\n'); // Check if it's TinyG
+                                    writeLog('Sent: {fb:n}', 2);
                                 }
                             }, 500);
                         }
@@ -444,6 +444,12 @@ io.sockets.on('connection', function (appSocket) {
                     } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
                         var jsObject = JSON.parse(data);
                         if (jsObject.hasOwnProperty('r')) {
+                            //if (jsObject.r == "") {
+                                tinygBufferSize++;
+                                blocked = false;
+                                send1Q();
+                            //}
+
                             var footer = jsObject.f || (jsObject.r && jsObject.r.f);
                             if (footer !== undefined) {
                                 if (footer[1] === 108) {
@@ -479,9 +485,10 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                             //writeLog('Response: ' + JSON.stringify(jsObject.r) + ', ' + footer, 3);
+
                             jsObject = jsObject.r;
 
-                            if (jsObject.hasOwnProperty('sr')) {    // position
+                            if (jsObject.hasOwnProperty('sr')) {    // status report
                                 writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
                                 //var jsObject = JSON.parse(data);
                                 var send = false;
@@ -501,13 +508,44 @@ io.sockets.on('connection', function (appSocket) {
                                     io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
                                     writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos, 3);
                                 }
-                            }
-
-                            if (footer[0] == 1) {
-                                io.sockets.emit('data', '<Idle,>');
-                                tinygBufferSize++;
-                                blocked = false;
-                                send1Q();
+                                if (jsObject.sr.stat) {
+                                    var status = null;
+                                    switch (jsObject.sr.stat) {
+                                        case 0:     // initializing
+                                            status = 'Init';
+                                            break;
+                                        case 1:     // ready
+                                            status = 'Idle';
+                                            break;
+                                        case 2:     // shutdown
+                                            status = 'Alarm';
+                                            break;
+                                        case 3:     // stop
+                                            status = 'Idle';
+                                            break;
+                                        case 4:     // end
+                                            status = 'Idle';
+                                            break;
+                                        case 5:     // run
+                                            status = 'Run';
+                                            break;
+                                        case 6:     // hold
+                                            status = 'Hold';
+                                            break;
+                                        case 7:     // probe cycle
+                                            status = 'Probe';
+                                            break;
+                                        case 8:     // running / cycling
+                                            status = 'Run';
+                                            break;
+                                        case 9:     // homing
+                                            status = 'Home';
+                                            break;
+                                    }
+                                    if (status) {
+                                        io.sockets.emit('data', '<' + status + ',>');
+                                    }
+                                }
                             }
                         }
                         if (jsObject.hasOwnProperty('fb')) {    // firmware
@@ -519,7 +557,7 @@ io.sockets.on('connection', function (appSocket) {
                             // Start intervall for status queries
                             statusLoop = setInterval(function () {
                                 if (isConnected) {
-                                    machineSend('{"sr":n}\n');
+                                    machineSend('{sr:n}\n');
                                     //writeLog('Sent: {"sr":null}', 2);
                                 }
                             }, 250);
