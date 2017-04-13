@@ -278,7 +278,7 @@ io.sockets.on('connection', function (appSocket) {
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
                                     machineSend('{"fb":""}\n'); // Check if it's TinyG
-                                    writeLog('Sent: $fb', 2);
+                                    writeLog('Sent: {"fb":""}', 2);
                                 }
                             }, 500);
                         }
@@ -478,40 +478,39 @@ io.sockets.on('connection', function (appSocket) {
                                     );
                                 }
                             }
-
-                            writeLog('Response: ' + jsObject.r + footer, 3);
-
+                            //writeLog('Response: ' + JSON.stringify(jsObject.r) + ', ' + footer, 3);
                             jsObject = jsObject.r;
 
-                            tinygBufferSize++;
-                            blocked = false;
-                            send1Q();
-                        }
+                            if (jsObject.hasOwnProperty('sr')) {    // position
+                                writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
+                                //var jsObject = JSON.parse(data);
+                                var send = true;
+                                if (jsObject.sr.posx) {
+                                    xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (jsObject.sr.posy) {
+                                    yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (jsObject.sr.posz) {
+                                    zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                    //writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos, 3);
+                                }
+                            }
 
-                        if (jsObject.hasOwnProperty('er')) {
-                            writeLog('errorReport ' + jsObject.er, 3);
-                        }
-                        if (jsObject.hasOwnProperty('sr')) {
-                            writeLog('statusChanged ' + jsObject.sr, 3);
-                            var jsObject = JSON.parse(data);
-                            if (jsObject.sr.posx) {
-                                xPos = parseFloat(jsObject.sr.posx).toFixed(4);
+                            if (footer[0] == 1) {
+                                io.sockets.emit('data', '<Idle,>');
+                                tinygBufferSize++;
+                                blocked = false;
+                                send1Q();
                             }
-                            if (jsObject.sr.posy) {
-                                yPos = parseFloat(jsObject.sr.posy).toFixed(4);
-                            }
-                            if (jsObject.sr.posz) {
-                                zPos = parseFloat(jsObject.sr.posz).toFixed(4);
-                            }
-                            io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
                         }
-                        if (jsObject.hasOwnProperty('gc')) {
-                            writeLog('gcodeReceived ' + jsObject.gc, 3);
-                        }
-                        if (jsObject.hasOwnProperty('rx')) {
-                            writeLog('rxReceived ' + jsObject.rx, 3);
-                        }
-                        if (jsObject.hasOwnProperty('fb')) { // TinyG detected
+                        if (jsObject.hasOwnProperty('fb')) {    // firmware
                             firmware = 'tinyg';
                             fVersion = jsObject.fb;
                             fDate = '';
@@ -520,12 +519,24 @@ io.sockets.on('connection', function (appSocket) {
                             // Start intervall for status queries
                             statusLoop = setInterval(function () {
                                 if (isConnected) {
-                                    machineSend('{"sr":null}\n');
+                                    machineSend('{"sr":n}\n');
                                     //writeLog('Sent: {"sr":null}', 2);
                                 }
                             }, 250);
                         }
-                        io.sockets.emit('data', data);
+                        if (jsObject.hasOwnProperty('gc')) {
+                            writeLog('gcodeReceived ' + jsObject.r.gc, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        if (jsObject.hasOwnProperty('rx')) {
+                            writeLog('rxReceived ' + jsObject.r.rx, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        if (jsObject.hasOwnProperty('er')) {
+                            writeLog('errorReport ' + jsObject.er, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        //io.sockets.emit('data', data);
                     } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                         switch (firmware) {
                         case 'grbl':
