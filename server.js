@@ -47,11 +47,11 @@ var grblStrings = require('./grblStrings.js');
 var logFile;
 var connectionType, connections = [];
 var gcodeQueue = [];
-var port, isConnected, connectedTo;
+var port, isConnected, connectedTo, portsList;
 var machineSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
-var statusLoop, queueCounter;
+var statusLoop, queueCounter, listPortsLoop;
 var lastSent = '', paused = false, blocked = false;
 
 var firmware, fVersion, fDate;
@@ -140,25 +140,38 @@ var io = websockets.listen(app);
 // WebSocket connection from frontend
 io.sockets.on('connection', function (appSocket) {
 
-    writeLog(chalk.yellow('App connected!'), 1);
-
     // save new connection
     connections.push(appSocket);
+    writeLog(chalk.yellow('App connected! (id=' + connections.indexOf(appSocket) + ')'), 1);
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
-
-    // send available ports
+    
+    // check available ports
     serialport.list(function (err, ports) {
-        appSocket.emit('ports', ports);
+        portsList = ports;
+        appSocket.emit('ports', portsList);
     });
+    // reckeck ports every 2s
+    listPortsLoop = setInterval(function () {
+        serialport.list(function (err, ports) {
+            if (JSON.stringify(ports) != JSON.stringify(portsList)) {
+                portsList = ports;
+                io.sockets.emit('ports', ports);
+                writeLog(chalk.yellow('Ports changed: ' + JSON.stringify(ports)), 1);
+            }
+        });
+    }, 2000);
 
     if (isConnected) {
         appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
         if (port) {
             appSocket.emit('connectStatus', 'opened:' + port.path);
+            appSocket.emit('activePort', port.path);
+            appSocket.emit('activeBaudRate', port.options.baudRate);
         } else {
             appSocket.emit('connectStatus', 'opened:' + connectedTo);
+            appSocket.emit('activeIP', connectedTo);
         }
         if (runningJob) {
             appSocket.emit('runningJob', runningJob);
@@ -1792,8 +1805,10 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
     
-    appSocket.on('disconnect', function () { // Deliver Firmware to Web-Client
-        writeLog(chalk.yellow('App disconnectd!'), 1);
+    appSocket.on('disconnect', function () { // App disconnected
+        let id = connections.indexOf(appSocket);
+        writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
+        connections.splice(id, 1);
     });    
 
 }); // End appSocket
