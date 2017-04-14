@@ -290,8 +290,8 @@ io.sockets.on('connection', function (appSocket) {
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
-                                    machineSend('{"fb":""}\n'); // Check if it's TinyG
-                                    writeLog('Sent: $fb', 2);
+                                    machineSend('{fb:n}\n'); // Check if it's TinyG
+                                    writeLog('Sent: {fb:n}', 2);
                                 }
                             }, 500);
                         }
@@ -457,6 +457,12 @@ io.sockets.on('connection', function (appSocket) {
                     } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
                         var jsObject = JSON.parse(data);
                         if (jsObject.hasOwnProperty('r')) {
+                            //if (jsObject.r == "") {
+                                tinygBufferSize++;
+                                blocked = false;
+                                send1Q();
+                            //}
+
                             var footer = jsObject.f || (jsObject.r && jsObject.r.f);
                             if (footer !== undefined) {
                                 if (footer[1] === 108) {
@@ -491,40 +497,71 @@ io.sockets.on('connection', function (appSocket) {
                                     );
                                 }
                             }
-
-                            writeLog('Response: ' + jsObject.r + footer, 3);
+                            //writeLog('Response: ' + JSON.stringify(jsObject.r) + ', ' + footer, 3);
 
                             jsObject = jsObject.r;
 
-                            tinygBufferSize++;
-                            blocked = false;
-                            send1Q();
-                        }
-
-                        if (jsObject.hasOwnProperty('er')) {
-                            writeLog('errorReport ' + jsObject.er, 3);
-                        }
-                        if (jsObject.hasOwnProperty('sr')) {
-                            writeLog('statusChanged ' + jsObject.sr, 3);
-                            var jsObject = JSON.parse(data);
-                            if (jsObject.sr.posx) {
-                                xPos = parseFloat(jsObject.sr.posx).toFixed(4);
+                            if (jsObject.hasOwnProperty('sr')) {    // status report
+                                writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
+                                //var jsObject = JSON.parse(data);
+                                var send = false;
+                                if (jsObject.sr.posx != null) {
+                                    xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (jsObject.sr.posy != null) {
+                                    yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (jsObject.sr.posz != null) {
+                                    zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                    writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos, 3);
+                                }
+                                if (jsObject.sr.stat) {
+                                    var status = null;
+                                    switch (jsObject.sr.stat) {
+                                        case 0:     // initializing
+                                            status = 'Init';
+                                            break;
+                                        case 1:     // ready
+                                            status = 'Idle';
+                                            break;
+                                        case 2:     // shutdown
+                                            status = 'Alarm';
+                                            break;
+                                        case 3:     // stop
+                                            status = 'Idle';
+                                            break;
+                                        case 4:     // end
+                                            status = 'Idle';
+                                            break;
+                                        case 5:     // run
+                                            status = 'Run';
+                                            break;
+                                        case 6:     // hold
+                                            status = 'Hold';
+                                            break;
+                                        case 7:     // probe cycle
+                                            status = 'Probe';
+                                            break;
+                                        case 8:     // running / cycling
+                                            status = 'Run';
+                                            break;
+                                        case 9:     // homing
+                                            status = 'Home';
+                                            break;
+                                    }
+                                    if (status) {
+                                        io.sockets.emit('data', '<' + status + ',>');
+                                    }
+                                }
                             }
-                            if (jsObject.sr.posy) {
-                                yPos = parseFloat(jsObject.sr.posy).toFixed(4);
-                            }
-                            if (jsObject.sr.posz) {
-                                zPos = parseFloat(jsObject.sr.posz).toFixed(4);
-                            }
-                            io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
                         }
-                        if (jsObject.hasOwnProperty('gc')) {
-                            writeLog('gcodeReceived ' + jsObject.gc, 3);
-                        }
-                        if (jsObject.hasOwnProperty('rx')) {
-                            writeLog('rxReceived ' + jsObject.rx, 3);
-                        }
-                        if (jsObject.hasOwnProperty('fb')) { // TinyG detected
+                        if (jsObject.hasOwnProperty('fb')) {    // firmware
                             firmware = 'tinyg';
                             fVersion = jsObject.fb;
                             fDate = '';
@@ -533,12 +570,24 @@ io.sockets.on('connection', function (appSocket) {
                             // Start intervall for status queries
                             statusLoop = setInterval(function () {
                                 if (isConnected) {
-                                    machineSend('{"sr":null}\n');
+                                    machineSend('{sr:n}\n');
                                     //writeLog('Sent: {"sr":null}', 2);
                                 }
                             }, 250);
                         }
-                        io.sockets.emit('data', data);
+                        if (jsObject.hasOwnProperty('gc')) {
+                            writeLog('gcodeReceived ' + jsObject.r.gc, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        if (jsObject.hasOwnProperty('rx')) {
+                            writeLog('rxReceived ' + jsObject.r.rx, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        if (jsObject.hasOwnProperty('er')) {
+                            writeLog('errorReport ' + jsObject.er, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        //io.sockets.emit('data', data);
                     } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                         switch (firmware) {
                         case 'grbl':
