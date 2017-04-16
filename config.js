@@ -3,7 +3,7 @@ require('dotenv').load({ silent: true });
 var config = {};
 
 config.webPort = process.env.WEB_PORT || 8000;
-config.serverVersion = '4.0.50';
+config.serverVersion = '4.0.63';
 config.apiVersion = '4.0.1';
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
