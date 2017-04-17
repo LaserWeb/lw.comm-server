@@ -1854,6 +1854,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
+
     appSocket.on('disconnect', function () { // App disconnected
         let id = connections.indexOf(appSocket);
         writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
@@ -2120,4 +2121,3 @@ if (electronApp) {
         }
     });
 }
-
