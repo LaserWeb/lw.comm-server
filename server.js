@@ -1726,9 +1726,11 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'tinyg':
+                paused = true;
                 machineSend('!'); // hold
                 writeLog('Sent: !', 2);
-//                    machineSend('%'); // dump TinyG queue
+                machineSend('%'); // dump TinyG queue
+                writeLog('Sent: %', 2);
                 break;
             }
             clearInterval(queueCounter);
@@ -1801,8 +1803,8 @@ io.sockets.on('connection', function (appSocket) {
                 case 'tinyg':
                     machineSend('%'); // flush tinyg quere
                     writeLog('Sent: %', 2);
-                    machineSend('~'); // resume
-                    writeLog('Sent: ~', 2);
+                    //machineSend('~'); // resume
+                    //writeLog('Sent: ~', 2);
                     blocked = false;
                     paused = false;
                     break;
