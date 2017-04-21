@@ -1326,14 +1326,14 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('jogTo', function (data) {     // data = {x:xVal, y:yVal, z:zVal, mode:0(absulute)|1(relative), feed:fVal}
-        writeLog(chalk.red('JogTo ' + data), 1);
+        writeLog(chalk.red('JogTo ' + JSON.stringify(data)), 1);
         if (isConnected) {
-            if (data.x || data.y || data.z) {
-                var xVal = (data.x ? 'X' + parseFloat(data.x) : '');
-                var yVal = (data.y ? 'Y' + parseFloat(data.y) : '');
-                var zVal = (data.z ? 'Z' + parseFloat(data.z) : '');
+            if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
+                var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) : '');
+                var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) : '');
+                var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) : '');
                 var mode = ((data.mode == 0) ? 0 : 1);
-                var feed = (data.feed ? 'F' + parseInt(data.feed) : '');
+                var feed = (data.feed !== undefined ? 'F' + parseInt(data.feed) : '');
                 writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
                 switch (firmware) {
                 case 'grbl':
