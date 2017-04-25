@@ -1,6 +1,6 @@
 {
   "name": "lw.comm-server",
-  "version": "4.0.63",
+  "version": "4.0.68",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "author": "Claudio Prezzi",
   "contributors": [
@@ -53,8 +53,8 @@
     "distlinx86": "npm run copy && build --linux --ia32 ",
     "distlinx64": "npm run copy && build --linux --x64",
     "copy": "ncp ../LaserWeb4/dist/ app/ --limit=6",
-    "nightlywindows": "cd .. && cd LaserWeb4-Binaries && git pull && cd .. && cd LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distwinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win64/ && cd .. && npm run distwinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win32/ && cd ../../LaserWeb4-Binaries && git add -A && git commit -m \"Nightly\" && git push origin master",
-    "nightlylinux": "cd .. && cd LaserWeb4-Binaries && git pull && cd .. && cd LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distlinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux64/ && cd .. && npm run distlinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux32/ && cd ../../LaserWeb4-Binaries && git add -A && git commit -m \"Nightly\" && git push origin master"
+    "nightlywindows": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distwinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win64/ && cd .. && npm run distwinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win32/ && cd ../../LaserWeb4-Binaries",
+    "nightlylinux": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distlinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux64/ && cd .. && npm run distlinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux32/ && cd ../../LaserWeb4-Binaries"
   },
   "keywords": [
     "laserweb",
