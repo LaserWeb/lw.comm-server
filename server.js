@@ -1638,9 +1638,8 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 break;
             case 'smoothie':
-                machineSend('!'); // Laser will be turned off by smoothie (in default config!)
-                //machineSend('M600\n'); // Laser will be turned off by smoothie (in default config!)
-                writeLog('Sent: !', 2);
+                machineSend('M600\n'); // Send hold command, @see http://smoothieware.org/stopping-smoothie
+                writeLog('Sent: M600', 2);
                 break;
             case 'tinyg':
                 machineSend('!'); // Send hold command
@@ -1665,9 +1664,8 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: ~', 2);
                 break;
             case 'smoothie':
-                machineSend('~'); // Send resume command
-                //machineSend('M601\n');
-                writeLog('Sent: ~', 2);
+                machineSend('M601\n'); // Send resume command, @see http://smoothieware.org/stopping-smoothie
+                writeLog('Sent: M601', 2);
                 break;
             case 'tinyg':
                 machineSend('~'); // Send resume command
