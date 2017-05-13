@@ -82,7 +82,7 @@ var TINYG_RX_BUFFER_SIZE = 4;       // max. lines of gcode to send before wait f
 var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
 
-var xPos = 0, yPos = 0, zPos = 0;
+var xPos = 0, yPos = 0, zPos = 0, aPos = 0;
 
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
@@ -359,7 +359,7 @@ io.sockets.on('connection', function (appSocket) {
                         var startWPos = data.search(/wpos:/i) + 5;
                         var wPos;
                         if (startWPos > 5) {
-                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                         }
                         if (Array.isArray(wPos)) {
                             var send = true;
@@ -375,8 +375,12 @@ io.sockets.on('connection', function (appSocket) {
                                 zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
                                 send = true;
                             }
+                            if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                send = true;
+                            }
                             if (send) {
-                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                             }
                         }
 
@@ -518,8 +522,12 @@ io.sockets.on('connection', function (appSocket) {
                                     send = true;
                                 }
                                 if (send) {
-                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
-                                    writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos, 3);
+                                if (jsObject.sr.posa != null) {
+                                    aPos = parseFloat(jsObject.sr.posa).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                    writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos + ', ' + aPos, 3);
                                 }
                                 if (jsObject.sr.stat) {
                                     var status = null;
@@ -747,7 +755,7 @@ io.sockets.on('connection', function (appSocket) {
                             var startWPos = data.search(/wpos:/i) + 5;
                             var wPos;
                             if (startWPos > 5) {
-                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                             }
                             if (Array.isArray(wPos)) {
                                 var send = true;
@@ -763,8 +771,12 @@ io.sockets.on('connection', function (appSocket) {
                                     zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
                                     send = true;
                                 }
+                                if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                    aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
                                 if (send) {
-                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                                 }
                             }
 
@@ -840,9 +852,10 @@ io.sockets.on('connection', function (appSocket) {
                                 var wxpos = parseFloat(wpos[1]).toFixed(2);
                                 var wypos = parseFloat(wpos[3]).toFixed(2);
                                 var wzpos = parseFloat(wpos[5]).toFixed(2);
-                                var wpos = wxpos + ',' + wypos + ',' + wzpos;
+                                var wapos = parseFloat(wpos[7]).toFixed(2);
+                                var wpos = wxpos + ',' + wypos + ',' + wzpos + ',' + wapos;
                                 writeLog('Telnet: ' + 'WPos:' + wpos, 1);
-                                io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos});
+                                io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos, a: wapos});
                             }
                         } else if (data.indexOf('MCS:') >= 0) {
                             //console.log('Telnet:', response);
@@ -857,9 +870,10 @@ io.sockets.on('connection', function (appSocket) {
                                 var mxpos = parseFloat(mpos[1]).toFixed(2);
                                 var mypos = parseFloat(mpos[3]).toFixed(2);
                                 var mzpos = parseFloat(mpos[5]).toFixed(2);
-                                var mpos = mxpos + ',' + mypos + ',' + mzpos;
+                                var mapos = parseFloat(mpos[7]).toFixed(2);
+                                var mpos = mxpos + ',' + mypos + ',' + mzpos + ',' + mapos;
                                 writeLog('Telnet: ' + 'MPos:' + mpos, 1);
-                                io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos});
+                                io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos, a: mapos});
                             }
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                             switch (firmware) {
@@ -990,7 +1004,7 @@ io.sockets.on('connection', function (appSocket) {
                                 var startWPos = data.search(/wpos:/i) + 5;
                                 var wPos;
                                 if (startWPos > 5) {
-                                    wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                                    wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                                 }
                                 if (Array.isArray(wPos)) {
                                     var send = true;
@@ -1006,8 +1020,12 @@ io.sockets.on('connection', function (appSocket) {
                                         zPos = parseFloat(wPos[2]).toFixed(4);
                                         send = true;
                                     }
+                                    if (aPos !== parseFloat(wPos[3]).toFixed(4)) {
+                                        aPos = parseFloat(wPos[3]).toFixed(4);
+                                        send = true;
+                                    }
                                     if (send) {
-                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                                     }
                                 }
                                 // Extract override values (for Grbl > v1.1 only!)
@@ -1132,7 +1150,10 @@ io.sockets.on('connection', function (appSocket) {
                                     if (jsObject.sr.posz) {
                                         zPos = parseFloat(jsObject.sr.posz).toFixed(4);
                                     }
-                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                                    if (jsObject.sr.posa) {
+                                        aPos = parseFloat(jsObject.sr.posa).toFixed(4);
+                                    }
+                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos + ',' + aPos);
                                 }
                                 if (jsObject.hasOwnProperty('gc')) {
                                     writeLog('gcodeReceived ' + jsObject.gc, 3);
@@ -1235,6 +1256,8 @@ io.sockets.on('connection', function (appSocket) {
                             } else if (tosend.indexOf('Y') === 0) {
                                 tosend = tosend.replace(/\s+/g, '');
                             } else if (tosend.indexOf('Z') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('A') === 0) {
                                 tosend = tosend.replace(/\s+/g, '');
                             }
                             if (newMode) {
@@ -1349,8 +1372,11 @@ io.sockets.on('connection', function (appSocket) {
             case 'z':
                 addQ('G10 L20 P0﻿ Z0');
                 break;
+            case 'a':
+                addQ('G10 L20 P0﻿ A0');
+                break;
             case 'all':
-                addQ('G10 L20 P0﻿ X0 Y0 Z0');
+                addQ('G10 L20 P0﻿ X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -1374,8 +1400,11 @@ io.sockets.on('connection', function (appSocket) {
             case 'z':
                 addQ('G0 Z0');
                 break;
+            case 'a':
+                addQ('G0 A0');
+                break;
             case 'all':
-                addQ('G0 X0 Y0 Z0');
+                addQ('G0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
