@@ -147,7 +147,7 @@ io.sockets.on('connection', function (appSocket) {
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
-    
+
     // check available ports
     serialport.list(function (err, ports) {
         portsList = ports;
@@ -1256,6 +1256,11 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
+    appSocket.on('currentQueue', function (data) {
+        writeLog(chalk.red('Sending GCODE queue to Frontend');
+        io.sockets.emit('gcodeQueue', gcodeQueue);
+    });
+
     appSocket.on('runCommand', function (data) {
         writeLog(chalk.red('Run Command (' + data.replace('\n', '|') + ')'), 1);
         if (isConnected) {
@@ -1317,7 +1322,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);    
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1358,7 +1363,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);    
+                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);
                 io.sockets.emit('data', 'Invalid jogTo() params!');
             }
         } else {
@@ -1887,12 +1892,12 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('disconnect', function () { // App disconnected
         let id = connections.indexOf(appSocket);
         writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
         connections.splice(id, 1);
-    });    
+    });
 
 }); // End appSocket
 
@@ -2125,7 +2130,7 @@ if (electronApp) {
           mainWindow.show()
         })
         mainWindow.maximize()
-        //mainWindow.webContents.openDevTools() // Enable when testing 
+        //mainWindow.webContents.openDevTools() // Enable when testing
     };
 
     electronApp.commandLine.appendSwitch("--ignore-gpu-blacklist");
