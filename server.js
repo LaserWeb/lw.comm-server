@@ -1257,7 +1257,7 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('currentQueue', function (data) {
-        writeLog(chalk.red('Sending GCODE queue to Frontend');
+        writeLog(chalk.red('Sending GCODE queue to Frontend'));
         io.sockets.emit('gcodeQueue', gcodeQueue);
     });
 
