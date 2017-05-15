@@ -83,6 +83,7 @@ var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
 
 var xPos = 0, yPos = 0, zPos = 0, aPos = 0;
+var xOffset = 0, yOffset = 0, zOffset = 0, aOffset = 0;
 
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
@@ -384,18 +385,46 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }
 
-//                            // Extract mPos
-//                            var startMPos = data.search(/mpos:/i) + 5;
-//                            var mPos;
-//                            if (startMPos > 5) {
-//                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
-//                            }
-//                            if (Array.isArray(mPos)) {
-//                                xPos = parseFloat(mPos[0]).toFixed(4);
-//                                yPos = parseFloat(mPos[1]).toFixed(4);
-//                                zPos = parseFloat(mPos[2]).toFixed(4);
-//                                appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
-//                            }
+                        // Extract mPos
+                        var startMPos = data.search(/mpos:/i) + 5;
+                        var mPos;
+                        if (startMPos > 5) {
+                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(mPos)) {
+                            var send = false;
+                            if (xOffset !== (parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos)) {
+                                xOffset = parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos;
+                                send = true;
+                            }
+                            if (yOffset !== (parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos)) {
+                                yOffset = parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos;
+                                send = true;
+                            }
+                            if (zOffset !== (parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos)) {
+                                zOffset = parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos;
+                                send = true;
+                            }
+                            if (aOffset !== (parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos)) {
+                                aOffset = parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos;
+                                send = true;
+                            }
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
+//                        // Extract mPos
+//                        var startMPos = data.search(/mpos:/i) + 5;
+//                        var mPos;
+//                        if (startMPos > 5) {
+//                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
+//                        }
+//                        if (Array.isArray(mPos)) {
+//                            xPos = parseFloat(mPos[0]).toFixed(4);
+//                            yPos = parseFloat(mPos[1]).toFixed(4);
+//                            zPos = parseFloat(mPos[2]).toFixed(4);
+//                            appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
+//                        }
 
                         // Extract override values (for Grbl > v1.1 only!)
                         var startOv = data.search(/ov:/i) + 3;
@@ -766,6 +795,35 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                                 if (send) {
                                     io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                }
+                            }
+
+                            // Extract mPos
+                            var startMPos = data.search(/mpos:/i) + 5;
+                            var mPos;
+                            if (startMPos > 5) {
+                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(mPos)) {
+                                var send = false;
+                                if (xOffset !== (parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos)) {
+                                    xOffset = parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos;
+                                    send = true;
+                                }
+                                if (yOffset !== (parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos)) {
+                                    yOffset = parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos;
+                                    send = true;
+                                }
+                                if (zOffset !== (parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos)) {
+                                    zOffset = parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos;
+                                    send = true;
+                                }
+                                if (aOffset !== (parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos)) {
+                                    aOffset = parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos;
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                 }
                             }
 
