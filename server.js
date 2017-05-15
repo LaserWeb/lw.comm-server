@@ -385,7 +385,7 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }
 
-                        // Extract mPos
+                        // Extract mPos (for smoothieware only!)
                         var startMPos = data.search(/mpos:/i) + 5;
                         var mPos;
                         if (startMPos > 5) {
@@ -393,38 +393,42 @@ io.sockets.on('connection', function (appSocket) {
                         }
                         if (Array.isArray(mPos)) {
                             var send = false;
-                            if (xOffset !== (parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos)) {
-                                xOffset = parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos;
+                            if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
                                 send = true;
                             }
-                            if (yOffset !== (parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos)) {
-                                yOffset = parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos;
+                            if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
                                 send = true;
                             }
-                            if (zOffset !== (parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos)) {
-                                zOffset = parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos;
+                            if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
                                 send = true;
                             }
-                            if (aOffset !== (parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos)) {
-                                aOffset = parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos;
+                            if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
                                 send = true;
                             }
                             if (send) {
                                 io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                             }
                         }
-//                        // Extract mPos
-//                        var startMPos = data.search(/mpos:/i) + 5;
-//                        var mPos;
-//                        if (startMPos > 5) {
-//                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
-//                        }
-//                        if (Array.isArray(mPos)) {
-//                            xPos = parseFloat(mPos[0]).toFixed(4);
-//                            yPos = parseFloat(mPos[1]).toFixed(4);
-//                            zPos = parseFloat(mPos[2]).toFixed(4);
-//                            appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
-//                        }
+
+                        // Extract work offset (for Grbl > 1.1 only!)
+                        var startWCO = data.search(/wco:/i) + 4;
+                        var wco;
+                        if (startWCO > 4) {
+                            wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(wco)) {
+                            xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                            yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                            zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                            aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
 
                         // Extract override values (for Grbl > v1.1 only!)
                         var startOv = data.search(/ov:/i) + 3;
