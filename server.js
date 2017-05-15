@@ -1395,19 +1395,22 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             switch (data) {
             case 'x':
-                addQ('G10 L20 P0﻿ X0');
+                addQ('G10 L20 P0 X0');
                 break;
             case 'y':
-                addQ('G10 L20 P0﻿ Y0');
+                addQ('G10 L20 P0 Y0');
                 break;
             case 'z':
-                addQ('G10 L20 P0﻿ Z0');
+                addQ('G10 L20 P0 Z0');
                 break;
             case 'a':
-                addQ('G10 L20 P0﻿ A0');
+                addQ('G10 L20 P0 A0');
                 break;
             case 'all':
-                addQ('G10 L20 P0﻿ X0 Y0 Z0 A0');
+                addQ('G10 L20 P0 X0 Y0 Z0');
+                break;
+            case 'xyza':
+                addQ('G10 L20 P0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -1435,6 +1438,9 @@ io.sockets.on('connection', function (appSocket) {
                 addQ('G0 A0');
                 break;
             case 'all':
+                addQ('G0 X0 Y0 Z0');
+                break;
+            case 'xyza':
                 addQ('G0 X0 Y0 Z0 A0');
                 break;
             }
