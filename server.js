@@ -83,6 +83,7 @@ var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
 
 var xPos = 0, yPos = 0, zPos = 0, aPos = 0;
+var xOffset = 0, yOffset = 0, zOffset = 0, aOffset = 0;
 
 const path = require('path');
 
@@ -385,18 +386,50 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }
 
-//                            // Extract mPos
-//                            var startMPos = data.search(/mpos:/i) + 5;
-//                            var mPos;
-//                            if (startMPos > 5) {
-//                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
-//                            }
-//                            if (Array.isArray(mPos)) {
-//                                xPos = parseFloat(mPos[0]).toFixed(4);
-//                                yPos = parseFloat(mPos[1]).toFixed(4);
-//                                zPos = parseFloat(mPos[2]).toFixed(4);
-//                                appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
-//                            }
+                        // Extract mPos (for smoothieware only!)
+                        var startMPos = data.search(/mpos:/i) + 5;
+                        var mPos;
+                        if (startMPos > 5) {
+                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(mPos)) {
+                            var send = false;
+                            if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
+
+                        // Extract work offset (for Grbl > 1.1 only!)
+                        var startWCO = data.search(/wco:/i) + 4;
+                        var wco;
+                        if (startWCO > 4) {
+                            wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(wco)) {
+                            xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                            yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                            zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                            aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
 
                         // Extract override values (for Grbl > v1.1 only!)
                         var startOv = data.search(/ov:/i) + 3;
@@ -767,6 +800,35 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                                 if (send) {
                                     io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                }
+                            }
+
+                            // Extract mPos
+                            var startMPos = data.search(/mpos:/i) + 5;
+                            var mPos;
+                            if (startMPos > 5) {
+                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(mPos)) {
+                                var send = false;
+                                if (xOffset !== (parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos)) {
+                                    xOffset = parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos;
+                                    send = true;
+                                }
+                                if (yOffset !== (parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos)) {
+                                    yOffset = parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos;
+                                    send = true;
+                                }
+                                if (zOffset !== (parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos)) {
+                                    zOffset = parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos;
+                                    send = true;
+                                }
+                                if (aOffset !== (parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos)) {
+                                    aOffset = parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos;
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                 }
                             }
 
@@ -1401,19 +1463,22 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             switch (data) {
             case 'x':
-                addQ('G10 L20 P0﻿ X0');
+                addQ('G10 L20 P0 X0');
                 break;
             case 'y':
-                addQ('G10 L20 P0﻿ Y0');
+                addQ('G10 L20 P0 Y0');
                 break;
             case 'z':
-                addQ('G10 L20 P0﻿ Z0');
+                addQ('G10 L20 P0 Z0');
                 break;
             case 'a':
-                addQ('G10 L20 P0﻿ A0');
+                addQ('G10 L20 P0 A0');
                 break;
             case 'all':
-                addQ('G10 L20 P0﻿ X0 Y0 Z0 A0');
+                addQ('G10 L20 P0 X0 Y0 Z0');
+                break;
+            case 'xyza':
+                addQ('G10 L20 P0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -1441,6 +1506,9 @@ io.sockets.on('connection', function (appSocket) {
                 addQ('G0 A0');
                 break;
             case 'all':
+                addQ('G0 X0 Y0 Z0');
+                break;
+            case 'xyza':
                 addQ('G0 X0 Y0 Z0 A0');
                 break;
             }
