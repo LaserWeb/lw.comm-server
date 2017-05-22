@@ -27,7 +27,7 @@
     "node-static": "*",
     "request": "*",
     "serialport": "^4.0.7",
-    "socket.io": "*",
+    "socket.io": "1.7.x",
     "ws": "^1.1.1"
   },
   "devDependencies": {},
