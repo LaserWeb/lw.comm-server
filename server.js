@@ -297,20 +297,22 @@ io.sockets.on('connection', function (appSocket) {
                             }, 500);
                         }
                     }, 500);
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing port ' + port.path, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
-                            io.sockets.emit('connectStatus', 'closing:' + port.path);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            port.close();
-                        }
-                    }, 2000);
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing port ' + port.path, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
+                                io.sockets.emit('connectStatus', 'closing:' + port.path);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                port.close();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
                     // machineSend("M115\n");    // Lets check if its Marlin?
 
                     writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
