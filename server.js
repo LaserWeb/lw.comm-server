@@ -78,9 +78,12 @@ var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
 var smoothie_buffer = false;
 var lastMode;
 
-var TINYG_RX_BUFFER_SIZE = 24;       // max. lines of gcode to send before wait for ok
+var TINYG_RX_BUFFER_SIZE = 24;              // max. lines of gcode to send before wait for ok
 var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
+
+var REPETIER_RX_BUFFER_SIZE = 2;                   // max. lines of gcode to send before wait for ok
+var repetierBufferSize = REPETIER_RX_BUFFER_SIZE;   // init space left
 
 var xPos = 0, yPos = 0, zPos = 0, aPos = 0;
 var xOffset = 0, yOffset = 0, zOffset = 0, aOffset = 0;
@@ -293,24 +296,32 @@ io.sockets.on('connection', function (appSocket) {
                                 if (!firmware) {     // If still not set
                                     machineSend('{fb:n}\n'); // Check if it's TinyG
                                     writeLog('Sent: {fb:n}', 2);
+                                    setTimeout(function () {  // Wait for TinyG to answer
+                                        if (!firmware) {     // If still not set
+                                            machineSend('M115\n'); // Check if it's Repetier
+                                            writeLog('Sent: M115', 2);
+                                        }
+                                    }, 10000);
                                 }
                             }, 500);
                         }
                     }, 500);
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing port ' + port.path, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
-                            io.sockets.emit('connectStatus', 'closing:' + port.path);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            port.close();
-                        }
-                    }, 2000);
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing port ' + port.path, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
+                                io.sockets.emit('connectStatus', 'closing:' + port.path);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                port.close();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
                     // machineSend("M115\n");    // Lets check if its Marlin?
 
                     writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
@@ -348,6 +359,9 @@ io.sockets.on('connection', function (appSocket) {
                     if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
                         if (firmware === 'grbl') {
                             grblBufferSize.shift();
+                        }
+                        if (firmware === 'repetier') {
+                            repetierBufferSize++;
                         }
                         blocked = false;
                         send1Q();
@@ -460,7 +474,41 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }
-
+                        
+                    } else if (data.indexOf('X') === 0) {
+                        // Extract wPos for Repetier
+                        var pos;
+                        var startPos = data.search(/x:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (xPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                xPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        var startPos = data.search(/y:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (yPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                yPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        var startPos = data.search(/z:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (zPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                zPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        var startPos = data.search(/e:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (aPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                aPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                        //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
+                        
                     } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                         firmware = 'grbl';
                         fVersion = data.substr(5, 4); // get version
@@ -491,6 +539,23 @@ io.sockets.on('connection', function (appSocket) {
                                 //writeLog('Sent: ?', 2);
                             }
                         }, 250);
+                    } else if (data.indexOf('Repetier') >= 0) { // Check if it's Repetier
+                        firmware = 'repetier';
+                        var startPos = data.search(/repetier_/i) + 9;
+                        fVersion = data.substr(startPos, 4); // get version
+                        fDate = '';
+                        writeLog('Repetier detected (' + fVersion + ')', 1);
+                        io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                        // Start intervall for status queries
+                        statusLoop = setInterval(function () {
+                            if (isConnected) {
+                                if (repetierBufferSize > 0) {
+                                    machineSend('M114\n'); // query position
+                                    repetierBufferSize--;
+                                    writeLog('Sent: M114 (B' + repetierBufferSize + ')', 2);
+                                }
+                            }
+                        }, 500);
                     } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
                         var jsObject = JSON.parse(data);
                         if (jsObject.hasOwnProperty('r')) {
@@ -631,6 +696,16 @@ io.sockets.on('connection', function (appSocket) {
                         case 'tinyg':
                             io.sockets.emit('data', data);
                             break;
+                        case 'repetier':
+                            io.sockets.emit('data', data);
+                            break;
+                        }
+                    } else if (data.indexOf('wait') === 0) { // Got wait from Repetier -> ignore
+                        // do nothing
+                    } else if (data.indexOf('Resend') === 0) { // Got resend from Repetier -> TODO: resend corresponding line!!!
+                        switch (firmware) {
+                        case 'repetier':
+                            break;
                         }
 //                        data = data.split(':');
 //                        io.sockets.emit('alarm', data[1]);
@@ -656,6 +731,12 @@ io.sockets.on('connection', function (appSocket) {
 //                            blocked = false;
 //                            paused = false;
 //                            break;
+//                        case 'repetier':
+//                            machineSend('%'); // flush tinyg quere
+//                            machineSend('~'); // resume
+//                            blocked = false;
+//                            paused = false;
+//                            break;
 //                        }
                     } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                         switch (firmware) {
@@ -671,7 +752,12 @@ io.sockets.on('connection', function (appSocket) {
                         case 'tinyg':
                             io.sockets.emit('data', data);
                             break;
+                        case 'repetier':
+                            io.sockets.emit('data', data);
+                            break;
                         }
+                    } else if (data === ' ') {
+                        // nothing
                     } else {
                         io.sockets.emit('data', data);
                     }
@@ -939,6 +1025,9 @@ io.sockets.on('connection', function (appSocket) {
                             case 'tinyg':
                                 io.sockets.emit('data', data);
                                 break;
+                            case 'repetier':
+                                io.sockets.emit('data', data);
+                                break;
                             }
                         } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                             switch (firmware) {
@@ -952,6 +1041,9 @@ io.sockets.on('connection', function (appSocket) {
                                 io.sockets.emit('data', data);
                                 break;
                             case 'tinyg':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'repetier':
                                 io.sockets.emit('data', data);
                                 break;
                             }
@@ -1239,6 +1331,9 @@ io.sockets.on('connection', function (appSocket) {
                                 case 'tinyg':
                                     io.sockets.emit('data', data);
                                     break;
+                                case 'repetier':
+                                    io.sockets.emit('data', data);
+                                    break;
                                 }
                             } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                                 switch (firmware) {
@@ -1252,6 +1347,9 @@ io.sockets.on('connection', function (appSocket) {
                                     io.sockets.emit('data', data);
                                     break;
                                 case 'tinyg':
+                                    io.sockets.emit('data', data);
+                                    break;
+                                case 'repetier':
                                     io.sockets.emit('data', data);
                                     break;
                                 }
@@ -1396,6 +1494,12 @@ io.sockets.on('connection', function (appSocket) {
                     addQ('G90');
                     send1Q();
                     break;
+                case 'repetier':
+                    addQ('G91');
+                    addQ('G0' + feed + dir + dist);
+                    addQ('G90');
+                    send1Q();
+                    break;
                 default:
                     writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
                     break;
@@ -1437,6 +1541,12 @@ io.sockets.on('connection', function (appSocket) {
                     addQ('G90');
                     send1Q();
                     break;
+                case 'repetier':
+                    addQ('G9' + mode);
+                    addQ('G0' + feed + xVal + yVal + zVal);
+                    addQ('G90');
+                    send1Q();
+                    break;
                 default:
                     writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
                     break;
@@ -1469,7 +1579,14 @@ io.sockets.on('connection', function (appSocket) {
                 addQ('G10 L20 P0 A0');
                 break;
             case 'all':
-                addQ('G10 L20 P0 X0 Y0 Z0');
+                switch (firmware) {
+                case 'repetier':
+                    addQ('G92');
+                    break;
+                default:
+                    addQ('G10 L20 P0 X0 Y0 Z0');
+                    break;
+                }
                 break;
             case 'xyza':
                 addQ('G10 L20 P0 X0 Y0 Z0 A0');
@@ -1564,6 +1681,8 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'tinyg':
                 break;
+            case 'repetier':
+                break;
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1621,6 +1740,8 @@ io.sockets.on('connection', function (appSocket) {
                 //send1Q();
                 break;
             case 'tinyg':
+                break;
+            case 'repetier':
                 break;
             }
         } else {
@@ -1691,6 +1812,22 @@ io.sockets.on('connection', function (appSocket) {
                             }
                             send1Q();
                             break;
+                        case 'repetier':
+                            addQ('G1F1');
+                            addQ('M3S' + parseInt(power * maxS / 100));
+                            laserTestOn = true;
+                            appSocket.emit('laserTest', power);
+                            if (duration > 0) {
+                                addQ('G4 P' + duration / 1000);
+                                addQ('M5S0');
+                                laserTestOn = false;
+                                setTimeout(function () {
+                                    laserTestOn = false;
+                                    appSocket.emit('laserTest', 0);
+                                }, duration );
+                            }
+                            send1Q();
+                            break;
                         }
                     }
                 } else {
@@ -1706,6 +1843,10 @@ io.sockets.on('connection', function (appSocket) {
                         send1Q();
                         break;
                     case 'tinyg':
+                        addQ('M5S0');
+                        send1Q();
+                        break;
+                    case 'repetier':
                         addQ('M5S0');
                         send1Q();
                         break;
@@ -1743,6 +1884,8 @@ io.sockets.on('connection', function (appSocket) {
                 machineSend('!'); // Send hold command
                 writeLog('Sent: !', 2);
                 break;
+            case 'repetier':
+                break;
             }
             io.sockets.emit('runStatus', 'paused');
         } else {
@@ -1769,6 +1912,8 @@ io.sockets.on('connection', function (appSocket) {
             case 'tinyg':
                 machineSend('~'); // Send resume command
                 writeLog('Sent: ~', 2);
+                break;
+            case 'repetier':
                 break;
             }
             paused = false;
@@ -1829,6 +1974,11 @@ io.sockets.on('connection', function (appSocket) {
                 machineSend('%'); // dump TinyG queue
                 writeLog('Sent: %', 2);
                 break;
+            case 'repetier':
+                paused = true;
+                machineSend('M112/n'); // hold
+                writeLog('Sent: M112', 2);
+                break;
             }
             clearInterval(queueCounter);
             io.sockets.emit('qCount', 0);
@@ -1871,6 +2021,10 @@ io.sockets.on('connection', function (appSocket) {
                     machineSend('$X\n'); // resume
                     writeLog('Sent: $X', 2);
                     break;
+                case 'repetier':
+                    machineSend('$X\n'); // resume
+                    writeLog('Sent: $X', 2);
+                    break;
                 }
                 writeLog('Resuming Queue Lockout', 1);
                 break;
@@ -1905,6 +2059,14 @@ io.sockets.on('connection', function (appSocket) {
                     blocked = false;
                     paused = false;
                     break;
+                case 'repetier':
+                    machineSend('%'); // flush tinyg quere
+                    writeLog('Sent: %', 2);
+                    //machineSend('~'); // resume
+                    //writeLog('Sent: ~', 2);
+                    blocked = false;
+                    paused = false;
+                    break;
                 }
                 break;
             }
@@ -1929,6 +2091,10 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'tinyg':
+                machineSend(String.fromCharCode(0x18)); // ctrl-x
+                writeLog('Sent: Code(0x18)', 2);
+                break;
+            case 'repetier':
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
                 writeLog('Sent: Code(0x18)', 2);
                 break;
@@ -2111,6 +2277,14 @@ function send1Q() {
                 gcode = gcodeQueue.shift();
                 machineSend(gcode + '\n');
                 tinygBufferSize--;
+                writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+            }
+            break;
+        case 'repetier':
+            while (repetierBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
+                gcode = gcodeQueue.shift();
+                machineSend(gcode + '\n');
+                repetierBufferSize--;
                 writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
             }
             break;

@@ -10,5 +10,6 @@ config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
 config.logLevel = process.env.LOG_LEVEL || 0;
 
 config.posDecimals = process.env.DRO_DECIMALS || 2;
+config.firmwareWaitTime = process.env.FIRMWARE_WAIT_TIME || 5;
 
 module.exports = config;
