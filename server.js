@@ -82,8 +82,9 @@ var TINYG_RX_BUFFER_SIZE = 24;              // max. lines of gcode to send befor
 var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
 
-var REPETIER_RX_BUFFER_SIZE = 2;                   // max. lines of gcode to send before wait for ok
+var REPETIER_RX_BUFFER_SIZE = 1;                    // max. lines of gcode to send before wait for ok
 var repetierBufferSize = REPETIER_RX_BUFFER_SIZE;   // init space left
+var repetierWaitForPos = false;
 
 var xPos = 0, yPos = 0, zPos = 0, aPos = 0;
 var xOffset = 0, yOffset = 0, zOffset = 0, aOffset = 0;
@@ -299,6 +300,7 @@ io.sockets.on('connection', function (appSocket) {
                                     setTimeout(function () {  // Wait for TinyG to answer
                                         if (!firmware) {     // If still not set
                                             machineSend('M115\n'); // Check if it's Repetier
+                                            repetierBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
                                     }, 10000);
@@ -316,6 +318,8 @@ io.sockets.on('connection', function (appSocket) {
                                 gcodeQueue.length = 0; // dump the queye
                                 grblBufferSize.length = 0; // dump bufferSizes
                                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+                                repetierWaitForPos = false;
                                 clearInterval(queueCounter);
                                 clearInterval(statusLoop);
                                 port.close();
@@ -475,8 +479,7 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }
                         
-                    } else if (data.indexOf('X') === 0) {
-                        // Extract wPos for Repetier
+                    } else if (data.indexOf('X') === 0) {   // Extract wPos for Repetier
                         var pos;
                         var startPos = data.search(/x:/i) + 2;
                         if (startPos >= 2) {
@@ -508,6 +511,7 @@ io.sockets.on('connection', function (appSocket) {
                         }
                         io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                         //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
+                        repetierWaitForPos = false;
                         
                     } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                         firmware = 'grbl';
@@ -549,7 +553,8 @@ io.sockets.on('connection', function (appSocket) {
                         // Start intervall for status queries
                         statusLoop = setInterval(function () {
                             if (isConnected) {
-                                if (repetierBufferSize > 0) {
+                                if (!repetierWaitForPos && repetierBufferSize > 0) {
+                                    repetierWaitForPos = true;
                                     machineSend('M114\n'); // query position
                                     repetierBufferSize--;
                                     writeLog('Sent: M114 (B' + repetierBufferSize + ')', 2);
@@ -707,37 +712,6 @@ io.sockets.on('connection', function (appSocket) {
                         case 'repetier':
                             break;
                         }
-//                        data = data.split(':');
-//                        io.sockets.emit('alarm', data[1]);
-//                        writeLog('Emptying Queue', 1);
-//                        gcodeQueue.length = 0; // dump the queye
-//                        grblBufferSize.length = 0; // dump bufferSizes
-//                        tinygBufferSize = TINYG_RX_BUFFER_SIZE;
-//                        writeLog('Clearing Lockout', 1);
-//                        switch (firmware) {
-//                        case 'grbl':
-//                            machineSend('$X\n');
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        case 'smoothie':
-//                            machineSend('$X\n'); //M999
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        case 'tinyg':
-//                            machineSend('%'); // flush tinyg quere
-//                            machineSend('~'); // resume
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        case 'repetier':
-//                            machineSend('%'); // flush tinyg quere
-//                            machineSend('~'); // resume
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        }
                     } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                         switch (firmware) {
                         case 'grbl':
@@ -1096,6 +1070,8 @@ io.sockets.on('connection', function (appSocket) {
                             gcodeQueue.length = 0; // dump the queye
                             grblBufferSize.length = 0; // dump bufferSizes
                             tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                            repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+                            repetierWaitForPos = false;
                             clearInterval(queueCounter);
                             clearInterval(statusLoop);
                             machineSocket.close();
@@ -1952,7 +1928,6 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Cleaning Queue', 1);
                 gcodeQueue.length = 0; // Dump the Queye
                 grblBufferSize.length = 0; // Dump bufferSizes
-                tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
                 queueLen = 0;
                 queuePointer = 0;
                 queuePos = 0;
@@ -1985,6 +1960,8 @@ io.sockets.on('connection', function (appSocket) {
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
             tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+            repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+            repetierWaitForPos = false;
             queueLen = 0;
             queuePointer = 0;
             queuePos = 0;
@@ -2018,12 +1995,12 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog('Sent: $X', 2);
                     break;
                 case 'tinyg':
-                    machineSend('$X\n'); // resume
+                    machineSend('$X\n');
                     writeLog('Sent: $X', 2);
                     break;
                 case 'repetier':
-                    machineSend('$X\n'); // resume
-                    writeLog('Sent: $X', 2);
+                    machineSend('M112\n');
+                    writeLog('Sent: M112', 2);
                     break;
                 }
                 writeLog('Resuming Queue Lockout', 1);
@@ -2033,6 +2010,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // Dump the Queye
                 grblBufferSize.length = 0; // Dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+                repetierWaitForPos = false;
                 queueLen = 0;
                 queuePointer = 0;
                 queuePos = 0;
@@ -2060,10 +2039,8 @@ io.sockets.on('connection', function (appSocket) {
                     paused = false;
                     break;
                 case 'repetier':
-                    machineSend('%'); // flush tinyg quere
-                    writeLog('Sent: %', 2);
-                    //machineSend('~'); // resume
-                    //writeLog('Sent: ~', 2);
+                    machineSend('M112/b');
+                    writeLog('Sent: M112', 2);
                     blocked = false;
                     paused = false;
                     break;
@@ -2095,8 +2072,8 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'repetier':
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
+                machineSend('M112/n');
+                writeLog('Sent: M112', 2);
                 break;
             }
         } else {
@@ -2116,6 +2093,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // dump the queye
                 grblBufferSize.length = 0; // dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+                repetierWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
                 port.close();
@@ -2127,6 +2106,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // dump the queye
                 grblBufferSize.length = 0; // dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+                repetierWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
                 machineSocket.destroy();
@@ -2138,6 +2119,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // dump the queye
                 grblBufferSize.length = 0; // dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+                repetierWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
                 machineSocket.close();
@@ -2314,6 +2297,7 @@ function send1Q() {
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
             tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+            repetierBufferSize = REPETIER_RX_BUFFER_SIZE;  // reset tinygBufferSize
             queueLen = 0;
             queuePointer = 0;
             queuePos = 0;
