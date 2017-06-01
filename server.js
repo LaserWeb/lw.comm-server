@@ -812,20 +812,20 @@ io.sockets.on('connection', function (appSocket) {
                             }
                             if (Array.isArray(mPos)) {
                                 var send = false;
-                                if (xOffset !== (parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos)) {
-                                    xOffset = parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos;
+                                if (xOffset !== (parseFloat(mPos[0] - xPos).toFixed(config.posDecimals))) {
+                                    xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
                                     send = true;
                                 }
-                                if (yOffset !== (parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos)) {
-                                    yOffset = parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos;
+                                if (yOffset !== (parseFloat(mPos[1] - yPos).toFixed(config.posDecimals))) {
+                                    yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
                                     send = true;
                                 }
-                                if (zOffset !== (parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos)) {
-                                    zOffset = parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos;
+                                if (zOffset !== (parseFloat(mPos[2] - zPos).toFixed(config.posDecimals))) {
+                                    zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
                                     send = true;
                                 }
-                                if (aOffset !== (parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos)) {
-                                    aOffset = parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos;
+                                if (aOffset !== (parseFloat(mPos[3] - aPos).toFixed(config.posDecimals))) {
+                                    aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
                                     send = true;
                                 }
                                 if (send) {
