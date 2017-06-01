@@ -82,8 +82,8 @@ var TINYG_RX_BUFFER_SIZE = 24;       // max. lines of gcode to send before wait 
 var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
 
-var xPos = 0, yPos = 0, zPos = 0, aPos = 0;
-var xOffset = 0, yOffset = 0, zOffset = 0, aOffset = 0;
+var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
+var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
