@@ -78,11 +78,12 @@ var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
 var smoothie_buffer = false;
 var lastMode;
 
-var TINYG_RX_BUFFER_SIZE = 4;       // max. lines of gcode to send before wait for ok
+var TINYG_RX_BUFFER_SIZE = 24;       // max. lines of gcode to send before wait for ok
 var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
 
-var xPos = 0, yPos = 0, zPos = 0;
+var xPos = 0, yPos = 0, zPos = 0, aPos = 0;
+var xOffset = 0, yOffset = 0, zOffset = 0, aOffset = 0;
 
 const path = require('path');
 
@@ -147,7 +148,7 @@ io.sockets.on('connection', function (appSocket) {
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
-    
+
     // check available ports
     serialport.list(function (err, ports) {
         portsList = ports;
@@ -297,20 +298,22 @@ io.sockets.on('connection', function (appSocket) {
                             }, 500);
                         }
                     }, 500);
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing port ' + port.path, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
-                            io.sockets.emit('connectStatus', 'closing:' + port.path);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            port.close();
-                        }
-                    }, 2000);
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing port ' + port.path, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
+                                io.sockets.emit('connectStatus', 'closing:' + port.path);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                port.close();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
                     // machineSend("M115\n");    // Lets check if its Marlin?
 
                     writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
@@ -360,7 +363,7 @@ io.sockets.on('connection', function (appSocket) {
                         var startWPos = data.search(/wpos:/i) + 5;
                         var wPos;
                         if (startWPos > 5) {
-                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                         }
                         if (Array.isArray(wPos)) {
                             var send = true;
@@ -376,23 +379,59 @@ io.sockets.on('connection', function (appSocket) {
                                 zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
                                 send = true;
                             }
+                            if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                send = true;
+                            }
                             if (send) {
-                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                             }
                         }
 
-//                            // Extract mPos
-//                            var startMPos = data.search(/mpos:/i) + 5;
-//                            var mPos;
-//                            if (startMPos > 5) {
-//                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
-//                            }
-//                            if (Array.isArray(mPos)) {
-//                                xPos = parseFloat(mPos[0]).toFixed(4);
-//                                yPos = parseFloat(mPos[1]).toFixed(4);
-//                                zPos = parseFloat(mPos[2]).toFixed(4);
-//                                appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
-//                            }
+                        // Extract mPos (for smoothieware only!)
+                        var startMPos = data.search(/mpos:/i) + 5;
+                        var mPos;
+                        if (startMPos > 5) {
+                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(mPos)) {
+                            var send = false;
+                            if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
+
+                        // Extract work offset (for Grbl > 1.1 only!)
+                        var startWCO = data.search(/wco:/i) + 4;
+                        var wco;
+                        if (startWCO > 4) {
+                            wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(wco)) {
+                            xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                            yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                            zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                            aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
 
                         // Extract override values (for Grbl > v1.1 only!)
                         var startOv = data.search(/ov:/i) + 3;
@@ -458,107 +497,100 @@ io.sockets.on('connection', function (appSocket) {
                     } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
                         var jsObject = JSON.parse(data);
                         if (jsObject.hasOwnProperty('r')) {
-                            //if (jsObject.r == "") {
-                                tinygBufferSize++;
-                                blocked = false;
-                                send1Q();
-                            //}
-
                             var footer = jsObject.f || (jsObject.r && jsObject.r.f);
+                            var responseText;
                             if (footer !== undefined) {
                                 if (footer[1] === 108) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an syntax error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an syntax error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
                                 } else if (footer[1] === 20) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an internal error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an internal error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
                                 } else if (footer[1] === 202) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an TOO SHORT MOVE on line %d", jsObject.r.n) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an TOO SHORT MOVE on line %d", jsObject.r.n);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
                                 } else if (footer[1] === 204) {
-                                    writeLog(
-                                        "InAlarm: " +
-                                        util.format("TinyG reported COMMAND REJECTED BY ALARM '%s'", JSON.stringify(jsObject.r)) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported COMMAND REJECTED BY ALARM '%s'", JSON.stringify(jsObject.r));
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("InAlarm: " + responseText + jsObject, 3);
                                 } else if (footer[1] !== 0) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
+                                } else {
+                                    //io.sockets.emit('data', data);
                                 }
                             }
                             //writeLog('Response: ' + JSON.stringify(jsObject.r) + ', ' + footer, 3);
-
                             jsObject = jsObject.r;
 
-                            if (jsObject.hasOwnProperty('sr')) {    // status report
-                                writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
-                                //var jsObject = JSON.parse(data);
-                                var send = false;
-                                if (jsObject.sr.posx != null) {
-                                    xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
-                                    send = true;
+                            tinygBufferSize++;
+                            blocked = false;
+                            send1Q();
+                        }
+                        if (jsObject.hasOwnProperty('sr')) {    // status report
+                            //writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
+                            var send = false;
+                            if (jsObject.sr.posx != null) {
+                                xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (jsObject.sr.posy != null) {
+                                yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (jsObject.sr.posz != null) {
+                                zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (jsObject.sr.posa != null) {
+                                aPos = parseFloat(jsObject.sr.posa).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (send) {
+                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                //writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos + ', ' + aPos, 3);
+                            }
+                            if (jsObject.sr.stat) {
+                                var status = null;
+                                switch (jsObject.sr.stat) {
+                                    case 0:     // initializing
+                                        status = 'Init';
+                                        break;
+                                    case 1:     // ready
+                                        status = 'Idle';
+                                        break;
+                                    case 2:     // shutdown
+                                        status = 'Alarm';
+                                        break;
+                                    case 3:     // stop
+                                        status = 'Idle';
+                                        break;
+                                    case 4:     // end
+                                        status = 'Idle';
+                                        break;
+                                    case 5:     // run
+                                        status = 'Run';
+                                        break;
+                                    case 6:     // hold
+                                        status = 'Hold';
+                                        break;
+                                    case 7:     // probe cycle
+                                        status = 'Probe';
+                                        break;
+                                    case 8:     // running / cycling
+                                        status = 'Run';
+                                        break;
+                                    case 9:     // homing
+                                        status = 'Home';
+                                        break;
                                 }
-                                if (jsObject.sr.posy != null) {
-                                    yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
-                                    send = true;
-                                }
-                                if (jsObject.sr.posz != null) {
-                                    zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
-                                    send = true;
-                                }
-                                if (send) {
-                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
-                                    writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos, 3);
-                                }
-                                if (jsObject.sr.stat) {
-                                    var status = null;
-                                    switch (jsObject.sr.stat) {
-                                        case 0:     // initializing
-                                            status = 'Init';
-                                            break;
-                                        case 1:     // ready
-                                            status = 'Idle';
-                                            break;
-                                        case 2:     // shutdown
-                                            status = 'Alarm';
-                                            break;
-                                        case 3:     // stop
-                                            status = 'Idle';
-                                            break;
-                                        case 4:     // end
-                                            status = 'Idle';
-                                            break;
-                                        case 5:     // run
-                                            status = 'Run';
-                                            break;
-                                        case 6:     // hold
-                                            status = 'Hold';
-                                            break;
-                                        case 7:     // probe cycle
-                                            status = 'Probe';
-                                            break;
-                                        case 8:     // running / cycling
-                                            status = 'Run';
-                                            break;
-                                        case 9:     // homing
-                                            status = 'Home';
-                                            break;
-                                    }
-                                    if (status) {
-                                        io.sockets.emit('data', '<' + status + ',>');
-                                    }
+                                if (status) {
+                                    io.sockets.emit('data', '<' + status + ',>');
+                                    //writeLog('Status: ' + status, 3);
                                 }
                             }
                         }
@@ -569,12 +601,12 @@ io.sockets.on('connection', function (appSocket) {
                             writeLog('TinyG detected (' + fVersion + ')', 1);
                             io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
                             // Start intervall for status queries
-                            statusLoop = setInterval(function () {
-                                if (isConnected) {
-                                    machineSend('{sr:n}\n');
-                                    //writeLog('Sent: {"sr":null}', 2);
-                                }
-                            }, 250);
+//                            statusLoop = setInterval(function () {
+//                                if (isConnected) {
+//                                    machineSend('{sr:n}\n');
+//                                    //writeLog('Sent: {"sr":null}', 2);
+//                                }
+//                            }, 250);
                         }
                         if (jsObject.hasOwnProperty('gc')) {
                             writeLog('gcodeReceived ' + jsObject.r.gc, 3);
@@ -748,7 +780,7 @@ io.sockets.on('connection', function (appSocket) {
                             var startWPos = data.search(/wpos:/i) + 5;
                             var wPos;
                             if (startWPos > 5) {
-                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                             }
                             if (Array.isArray(wPos)) {
                                 var send = true;
@@ -764,8 +796,41 @@ io.sockets.on('connection', function (appSocket) {
                                     zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
                                     send = true;
                                 }
+                                if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                    aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
                                 if (send) {
-                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                }
+                            }
+
+                            // Extract mPos
+                            var startMPos = data.search(/mpos:/i) + 5;
+                            var mPos;
+                            if (startMPos > 5) {
+                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(mPos)) {
+                                var send = false;
+                                if (xOffset !== (parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos)) {
+                                    xOffset = parseFloat(mPos[0]).toFixed(config.posDecimals) - xPos;
+                                    send = true;
+                                }
+                                if (yOffset !== (parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos)) {
+                                    yOffset = parseFloat(mPos[1]).toFixed(config.posDecimals) - yPos;
+                                    send = true;
+                                }
+                                if (zOffset !== (parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos)) {
+                                    zOffset = parseFloat(mPos[2]).toFixed(config.posDecimals) - zPos;
+                                    send = true;
+                                }
+                                if (aOffset !== (parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos)) {
+                                    aOffset = parseFloat(mPos[3]).toFixed(config.posDecimals) - aPos;
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                 }
                             }
 
@@ -841,9 +906,10 @@ io.sockets.on('connection', function (appSocket) {
                                 var wxpos = parseFloat(wpos[1]).toFixed(2);
                                 var wypos = parseFloat(wpos[3]).toFixed(2);
                                 var wzpos = parseFloat(wpos[5]).toFixed(2);
-                                var wpos = wxpos + ',' + wypos + ',' + wzpos;
+                                var wapos = parseFloat(wpos[7]).toFixed(2);
+                                var wpos = wxpos + ',' + wypos + ',' + wzpos + ',' + wapos;
                                 writeLog('Telnet: ' + 'WPos:' + wpos, 1);
-                                io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos});
+                                io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos, a: wapos});
                             }
                         } else if (data.indexOf('MCS:') >= 0) {
                             //console.log('Telnet:', response);
@@ -858,9 +924,10 @@ io.sockets.on('connection', function (appSocket) {
                                 var mxpos = parseFloat(mpos[1]).toFixed(2);
                                 var mypos = parseFloat(mpos[3]).toFixed(2);
                                 var mzpos = parseFloat(mpos[5]).toFixed(2);
-                                var mpos = mxpos + ',' + mypos + ',' + mzpos;
+                                var mapos = parseFloat(mpos[7]).toFixed(2);
+                                var mpos = mxpos + ',' + mypos + ',' + mzpos + ',' + mapos;
                                 writeLog('Telnet: ' + 'MPos:' + mpos, 1);
-                                io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos});
+                                io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos, a: mapos});
                             }
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                             switch (firmware) {
@@ -991,7 +1058,7 @@ io.sockets.on('connection', function (appSocket) {
                                 var startWPos = data.search(/wpos:/i) + 5;
                                 var wPos;
                                 if (startWPos > 5) {
-                                    wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                                    wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                                 }
                                 if (Array.isArray(wPos)) {
                                     var send = true;
@@ -1007,8 +1074,12 @@ io.sockets.on('connection', function (appSocket) {
                                         zPos = parseFloat(wPos[2]).toFixed(4);
                                         send = true;
                                     }
+                                    if (aPos !== parseFloat(wPos[3]).toFixed(4)) {
+                                        aPos = parseFloat(wPos[3]).toFixed(4);
+                                        send = true;
+                                    }
                                     if (send) {
-                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                                     }
                                 }
                                 // Extract override values (for Grbl > v1.1 only!)
@@ -1133,7 +1204,10 @@ io.sockets.on('connection', function (appSocket) {
                                     if (jsObject.sr.posz) {
                                         zPos = parseFloat(jsObject.sr.posz).toFixed(4);
                                     }
-                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                                    if (jsObject.sr.posa) {
+                                        aPos = parseFloat(jsObject.sr.posa).toFixed(4);
+                                    }
+                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos + ',' + aPos);
                                 }
                                 if (jsObject.hasOwnProperty('gc')) {
                                     writeLog('gcodeReceived ' + jsObject.gc, 3);
@@ -1237,6 +1311,8 @@ io.sockets.on('connection', function (appSocket) {
                                 tosend = tosend.replace(/\s+/g, '');
                             } else if (tosend.indexOf('Z') === 0) {
                                 tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('A') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
                             }
                             if (newMode) {
                                 if (newMode === lastMode) {
@@ -1265,6 +1341,11 @@ io.sockets.on('connection', function (appSocket) {
             io.sockets.emit('connectStatus', 'Connect');
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
+    });
+
+    appSocket.on('currentQueue', function (data) {
+        writeLog(chalk.red('Sending GCODE queue to Frontend'));
+        io.sockets.emit('gcodeQueue', gcodeQueue);
     });
 
     appSocket.on('runCommand', function (data) {
@@ -1328,7 +1409,49 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid job params!'), 1);
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);
+            }
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
+    appSocket.on('jogTo', function (data) {     // data = {x:xVal, y:yVal, z:zVal, mode:0(absulute)|1(relative), feed:fVal}
+        writeLog(chalk.red('JogTo ' + JSON.stringify(data)), 1);
+        if (isConnected) {
+            if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
+                var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) : '');
+                var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) : '');
+                var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) : '');
+                var mode = ((data.mode == 0) ? 0 : 1);
+                var feed = (data.feed !== undefined ? 'F' + parseInt(data.feed) : '');
+                writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
+                switch (firmware) {
+                case 'grbl':
+                    addQ('$J=G9' + mode + xVal + yVal + zVal + feed);
+                    send1Q();
+                    break;
+                case 'smoothie':
+                    addQ('G9' + mode);
+                    addQ('G0' + feed + xVal + yVal + zVal);
+                    addQ('G90');
+                    send1Q();
+                    break;
+                case 'tinyg':
+                    addQ('G9' + mode);
+                    addQ('G0' + feed + xVal + yVal + zVal);
+                    addQ('G90');
+                    send1Q();
+                    break;
+                default:
+                    writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
+                    break;
+                }
+            } else {
+                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);
+                io.sockets.emit('data', 'Invalid jogTo() params!');
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1342,16 +1465,22 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             switch (data) {
             case 'x':
-                addQ('G10 L20 P0﻿ X0');
+                addQ('G10 L20 P0 X0');
                 break;
             case 'y':
-                addQ('G10 L20 P0﻿ Y0');
+                addQ('G10 L20 P0 Y0');
                 break;
             case 'z':
-                addQ('G10 L20 P0﻿ Z0');
+                addQ('G10 L20 P0 Z0');
+                break;
+            case 'a':
+                addQ('G10 L20 P0 A0');
                 break;
             case 'all':
-                addQ('G10 L20 P0﻿ X0 Y0 Z0');
+                addQ('G10 L20 P0 X0 Y0 Z0');
+                break;
+            case 'xyza':
+                addQ('G10 L20 P0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -1375,8 +1504,14 @@ io.sockets.on('connection', function (appSocket) {
             case 'z':
                 addQ('G0 Z0');
                 break;
+            case 'a':
+                addQ('G0 A0');
+                break;
             case 'all':
                 addQ('G0 X0 Y0 Z0');
+                break;
+            case 'xyza':
+                addQ('G0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -1696,9 +1831,11 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'tinyg':
+                paused = true;
                 machineSend('!'); // hold
                 writeLog('Sent: !', 2);
-//                    machineSend('%'); // dump TinyG queue
+                machineSend('%'); // dump TinyG queue
+                writeLog('Sent: %', 2);
                 break;
             }
             clearInterval(queueCounter);
@@ -1771,8 +1908,8 @@ io.sockets.on('connection', function (appSocket) {
                 case 'tinyg':
                     machineSend('%'); // flush tinyg quere
                     writeLog('Sent: %', 2);
-                    machineSend('~'); // resume
-                    writeLog('Sent: ~', 2);
+                    //machineSend('~'); // resume
+                    //writeLog('Sent: ~', 2);
                     blocked = false;
                     paused = false;
                     break;
@@ -1859,7 +1996,7 @@ io.sockets.on('connection', function (appSocket) {
         let id = connections.indexOf(appSocket);
         writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
         connections.splice(id, 1);
-    });    
+    });
 
 }); // End appSocket
 
@@ -2092,7 +2229,7 @@ if (electronApp) {
           mainWindow.show()
         })
         mainWindow.maximize()
-        //mainWindow.webContents.openDevTools() // Enable when testing 
+        //mainWindow.webContents.openDevTools() // Enable when testing
     };
 
     electronApp.commandLine.appendSwitch("--ignore-gpu-blacklist");
