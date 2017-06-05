@@ -634,31 +634,6 @@ io.sockets.on('connection', function (appSocket) {
                             io.sockets.emit('data', data);
                             break;
                         }
-//                        data = data.split(':');
-//                        io.sockets.emit('alarm', data[1]);
-//                        writeLog('Emptying Queue', 1);
-//                        gcodeQueue.length = 0; // dump the queye
-//                        grblBufferSize.length = 0; // dump bufferSizes
-//                        tinygBufferSize = TINYG_RX_BUFFER_SIZE;
-//                        writeLog('Clearing Lockout', 1);
-//                        switch (firmware) {
-//                        case 'grbl':
-//                            machineSend('$X\n');
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        case 'smoothie':
-//                            machineSend('$X\n'); //M999
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        case 'tinyg':
-//                            machineSend('%'); // flush tinyg quere
-//                            machineSend('~'); // resume
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        }
                     } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                         switch (firmware) {
                         case 'grbl':
@@ -692,37 +667,40 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
                     isConnected = true;
                     connectedTo = connectedIp;
-                    machineSocket.write('version\n');
 
-                    // Start intervall for status queries
-//                    statusLoop = setInterval(function () {
-//                        if (isConnected) {
-//                            //machineSocket.write('get pos\n');
-//                        } else {
-//                            clearInterval(statusLoop);
-//                            writeLog(chalk.yellow('WARN: ') + 'Unable to send gcode (not connected to Telnet)', 1);
-//                        }
-//                    }, 250);
-
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
-                            io.sockets.emit('connectStatus', 'closing:' + connectedTo);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            machineSocket.destroy();
+                    setTimeout(function () { //wait for controller to be ready
+                        if (!firmware) { // Grbl should be allready detected
+                            machineSocket.write('version\n'); // Check if it's Smoothieware?
+                            writeLog('Sent: version', 2);
+                            setTimeout(function () {  // Wait for Smoothie to answer
+                                if (!firmware) {     // If still not set
+                                    machineSend('{fb:n}\n'); // Check if it's TinyG
+                                    writeLog('Sent: {fb:n}', 2);
+                                }
+                            }, 500);
                         }
-                    }, 2000);
+                    }, 500);
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
+                                io.sockets.emit('connectStatus', 'closing:' + connectedTo);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                machineSocket.destroy();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
 
                     // Start interval for qCount messages to appSocket clients
-                    queueCounter = setInterval(function () {
-                        io.sockets.emit('qCount', gcodeQueue.length);
-                    }, 500);
+//                    queueCounter = setInterval(function () {
+//                        io.sockets.emit('qCount', gcodeQueue.length);
+//                    }, 500);
                 });
 
                 machineSocket.on('timeout', function () {
@@ -833,6 +811,22 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
 
+                            // Extract work offset (for Grbl > 1.1 only!)
+                            var startWCO = data.search(/wco:/i) + 4;
+                            var wco;
+                            if (startWCO > 4) {
+                                wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(wco)) {
+                                xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                                yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                                zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                                aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                }
+                            }
+
                             // Extract override values (for Grbl > v1.1 only!)
                             var startOv = data.search(/ov:/i) + 3;
                             if (startOv > 3) {
@@ -863,6 +857,7 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }
                             }
+                            
                         } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                             firmware = 'grbl';
                             fVersion = data.substr(5, 4); // get version
@@ -983,35 +978,34 @@ io.sockets.on('connection', function (appSocket) {
                     connectedTo = connectedIp;
                     //machineSend(String.fromCharCode(0x18));
 
-                    setTimeout(function() { //wait for controller to be ready
+                    setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
-                                    machineSend('$fb\n'); // Check if it's TinyG
-                                    writeLog('Sent: $fb', 2);
+                                    machineSend('{fb:n}\n'); // Check if it's TinyG
+                                    writeLog('Sent: {fb:n}', 2);
                                 }
                             }, 500);
                         }
                     }, 500);
-                    // machineSend("M115\n");    // Lets check if its Marlin?
-
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
-                            io.sockets.emit('connectStatus', 'closing:' + connectedTo);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            machineSocket.close();
-                        }
-                    }, 2000);
-
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
+                                io.sockets.emit('connectStatus', 'closing:' + connectedTo);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                machineSocket.close();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
                 });
 
                 machineSocket.on('close', function (e) {
@@ -1081,6 +1075,52 @@ io.sockets.on('connection', function (appSocket) {
                                         io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                                     }
                                 }
+
+                                // Extract mPos (for smoothieware only!)
+                                var startMPos = data.search(/mpos:/i) + 5;
+                                var mPos;
+                                if (startMPos > 5) {
+                                    mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                                }
+                                if (Array.isArray(mPos)) {
+                                    var send = false;
+                                    if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                        xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                        yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                        zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                        aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (send) {
+                                        io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                    }
+                                }
+                                
+                                // Extract work offset (for Grbl > 1.1 only!)
+                                var startWCO = data.search(/wco:/i) + 4;
+                                var wco;
+                                if (startWCO > 4) {
+                                    wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                                }
+                                if (Array.isArray(wco)) {
+                                    xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                                    yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                                    zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                                    aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                                    if (send) {
+                                        io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                    }
+                                }
+                                
                                 // Extract override values (for Grbl > v1.1 only!)
                                 var startOv = data.search(/ov:/i) + 3;
                                 if (startOv > 3) {
@@ -1097,6 +1137,7 @@ io.sockets.on('connection', function (appSocket) {
                                         }
                                     }
                                 }
+                                
                                 // Extract realtime Feed and Spindle (for Grbl > v1.1 only!)
                                 var startFS = data.search(/FS:/i) + 3;
                                 if (startFS > 3) {
@@ -1110,6 +1151,7 @@ io.sockets.on('connection', function (appSocket) {
                                         }
                                     }
                                 }
+                                
                             } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                                 firmware = 'grbl';
                                 fVersion = data.substr(5, 4); // get version
