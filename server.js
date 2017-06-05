@@ -2154,6 +2154,185 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
+    appSocked.on('sd.list', function () {  // List SD content
+        if (isConnected) {
+            writeLog(chalk.red('sd.list'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('ls/n');
+                writeLog('Sent: ls', 2);
+                break;
+            case 'marlin':
+                machineSend('M20/n');
+                writeLog('Sent: M20', 2);
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.cd', function (data) {  // Change directory
+        if (isConnected) {
+            writeLog(chalk.red('sd.cd'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('cd ' + data + '/n');
+                writeLog('Sent: cd', 2);
+                break;
+            case 'marlin':
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.rm', function (data) {  // Delete file
+        if (isConnected) {
+            writeLog(chalk.red('sd.rm'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('rm ' + data + '/n');
+                writeLog('Sent: rm', 2);
+                break;
+            case 'marlin':
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.mv', function (data) {  // Rename/move file
+        if (isConnected) {
+            writeLog(chalk.red('sd.mv'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('mv ' + data.file + ' ' + data.newfile + '/n');
+                writeLog('Sent: mv', 2);
+                break;
+            case 'marlin':
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.play', function (data) {  // Play file
+        if (isConnected) {
+            writeLog(chalk.red('sd.play'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('play ' + data + '/n');
+                writeLog('Sent: mv', 2);
+                break;
+            case 'marlin':
+                machineSend('M23 ' + data + '/n');
+                writeLog('Sent: M23', 2);
+                machineSend('M24/n');
+                writeLog('Sent: M24', 2);
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.pause', function () {  // Abort SD print
+        if (isConnected) {
+            writeLog(chalk.red('sd.abort'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('suspend/n');
+                writeLog('Sent: suspend', 2);
+                break;
+            case 'marlin':
+                machineSend('M25/n');
+                writeLog('Sent: M25', 2);
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.resume', function () {  // Resume SD print
+        if (isConnected) {
+            writeLog(chalk.red('sd.resume'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('resume/n');
+                writeLog('Sent: resume', 2);
+                break;
+            case 'marlin':
+                machineSend('M24/n');
+                writeLog('Sent: M24', 2);
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.abort', function () {  // Abort SD print
+        if (isConnected) {
+            writeLog(chalk.red('sd.abort'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('abort/n');
+                writeLog('Sent: abort', 2);
+                break;
+            case 'marlin':
+                machineSend('M25/n');
+                writeLog('Sent: M25', 2);
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.upload', function (data) {  // Upload file to SD
+        if (isConnected) {
+            writeLog(chalk.red('sd.upload'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('upload ' + data.filename + '' + data.gcode + '/n');
+                writeLog('Sent: upload', 2);
+                break;
+            case 'marlin':
+                machineSend('M28 ' + data.filename + '/n');
+                writeLog('Sent: M28', 2);
+                machineSend(data.gcode + '/n');
+                machineSend('M29/n');
+                writeLog('Sent: M29', 2);
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+
+    appSocked.on('sd.progress', function (data) {  // Get SD print progress
+        if (isConnected) {
+            writeLog(chalk.red('sd.progtress'), 1);
+            switch (firmware) {
+            case 'smoothie':
+                machineSend('progress/n');
+                writeLog('Sent: progress', 2);
+                break;
+            case 'marlin':
+                machineSend('M27/n');
+                writeLog('Sent: M27', 2);
+                break;
+            case 'repetier':
+                break;
+            }
+        }
+    });
+    
     appSocket.on('clearAlarm', function (data) { // Clear Alarm
         if (isConnected) {
             data = parseInt(data);
