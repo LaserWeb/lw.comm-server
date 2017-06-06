@@ -1090,7 +1090,7 @@ io.sockets.on('connection', function (appSocket) {
                                         writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
                                     }
                                 }
-                            }, 500);
+                            }, 250);
                         } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
                             firmware = 'marlinkimbra';
                             var startPos = data.search(/mk_/i) + 3;
@@ -1108,7 +1108,7 @@ io.sockets.on('connection', function (appSocket) {
                                         writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
                                     }
                                 }
-                            }, 500);
+                            }, 250);
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                             switch (firmware) {
                             case 'grbl':
@@ -1450,7 +1450,7 @@ io.sockets.on('connection', function (appSocket) {
                                             writeLog('Sent: M114 (B' + repetierBufferSize + ')', 2);
                                         }
                                     }
-                                }, 500);
+                                }, 250);
                             } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
                                 firmware = 'marlinkimbra';
                                 var startPos = data.search(/mk_/i) + 3;
@@ -1468,7 +1468,7 @@ io.sockets.on('connection', function (appSocket) {
                                             writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
                                         }
                                     }
-                                }, 500);
+                                }, 250);
                             } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
                                 var jsObject = JSON.parse(data);
                                 if (jsObject.hasOwnProperty('r')) {
