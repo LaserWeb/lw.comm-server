@@ -364,7 +364,7 @@ io.sockets.on('connection', function (appSocket) {
                         if (firmware === 'grbl') {
                             grblBufferSize.shift();
                         }
-                        if (firmware === 'repetier' || firmware === 'marlin') {
+                        if (firmware === 'repetier' || firmware === 'marlinkimbra') {
                             reprapBufferSize++;
                         }
                         blocked = false;
@@ -560,7 +560,7 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }, 250);
                     } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
-                        firmware = 'marlin';
+                        firmware = 'marlinkimbra';
                         var startPos = data.search(/mk_/i) + 3;
                         fVersion = data.substr(startPos, 5); // get version
                         fDate = '';
@@ -720,7 +720,7 @@ io.sockets.on('connection', function (appSocket) {
                         case 'repetier':
                             io.sockets.emit('data', data);
                             break;
-                        case 'marlin':
+                        case 'marlinkimbra':
                             io.sockets.emit('data', data);
                             break;
                         }
@@ -730,7 +730,7 @@ io.sockets.on('connection', function (appSocket) {
                         switch (firmware) {
                         case 'repetier':
                             break;
-                        case 'marlin':
+                        case 'marlinkimbra':
                             break;
                         }
                     } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
@@ -750,7 +750,7 @@ io.sockets.on('connection', function (appSocket) {
                         case 'repetier':
                             io.sockets.emit('data', data);
                             break;
-                        case 'marlin':
+                        case 'marlinkimbra':
                             io.sockets.emit('data', data);
                             break;
                         }
@@ -853,7 +853,7 @@ io.sockets.on('connection', function (appSocket) {
                             if (firmware === 'grbl') {
                                 grblBufferSize.shift();
                             }
-                            if (firmware === 'repetier' || firmware === 'marlin') {
+                            if (firmware === 'repetier' || firmware === 'marlinkimbra') {
                                 reprapBufferSize++;
                             }
                             blocked = false;
@@ -1024,6 +1024,10 @@ io.sockets.on('connection', function (appSocket) {
                                     machineSend('get status\n');
                                 }
                             }, 250);
+                        } else if (data.indexOf('start') === 0) { // Check if it's RepRap
+                            machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                            reprapBufferSize--;
+                            writeLog('Sent: M115', 2);
                         } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
                             firmware = 'repetier';
                             var startPos = data.search(/repetier_/i) + 9;
@@ -1043,7 +1047,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }, 500);
                         } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
-                            firmware = 'marlin';
+                            firmware = 'marlinkimbra';
                             var startPos = data.search(/mk_/i) + 3;
                             fVersion = data.substr(startPos, 5); // get version
                             fDate = '';
@@ -1112,7 +1116,7 @@ io.sockets.on('connection', function (appSocket) {
                             case 'repetier':
                                 io.sockets.emit('data', data);
                                 break;
-                            case 'marlin':
+                            case 'marlinkimbra':
                                 io.sockets.emit('data', data);
                                 break;
                             }
@@ -1122,7 +1126,7 @@ io.sockets.on('connection', function (appSocket) {
                             switch (firmware) {
                             case 'repetier':
                                 break;
-                            case 'marlin':
+                            case 'marlinkimbra':
                                 break;
                             }
                         } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
@@ -1142,7 +1146,7 @@ io.sockets.on('connection', function (appSocket) {
                             case 'repetier':
                                 io.sockets.emit('data', data);
                                 break;
-                            case 'marlin':
+                            case 'marlinkimbra':
                                 io.sockets.emit('data', data);
                                 break;
                             }
@@ -1237,7 +1241,7 @@ io.sockets.on('connection', function (appSocket) {
                                 if (firmware === 'grbl') {
                                     grblBufferSize.shift();
                                 }
-                                if (firmware === 'repetier' || firmware === 'marlin') {
+                                if (firmware === 'repetier' || firmware === 'marlinkimbra') {
                                     reprapBufferSize++;
                                 }
                                 blocked = false;
@@ -1410,6 +1414,10 @@ io.sockets.on('connection', function (appSocket) {
                                         machineSend('?');
                                     }
                                 }, 250);
+                            } else if (data.indexOf('start') === 0) { // Check if it's RepRap
+                                machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                                reprapBufferSize--;
+                                writeLog('Sent: M115', 2);
                             } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
                                 firmware = 'repetier';
                                 var startPos = data.search(/repetier_/i) + 9;
@@ -1429,7 +1437,7 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }, 500);
                             } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
-                                firmware = 'marlin';
+                                firmware = 'marlinkimbra';
                                 var startPos = data.search(/mk_/i) + 3;
                                 fVersion = data.substr(startPos, 5); // get version
                                 fDate = '';
@@ -1549,7 +1557,7 @@ io.sockets.on('connection', function (appSocket) {
                                 case 'repetier':
                                     io.sockets.emit('data', data);
                                     break;
-                                case 'marlin':
+                                case 'marlinkimbra':
                                     io.sockets.emit('data', data);
                                     break;
                                 }
@@ -1559,7 +1567,7 @@ io.sockets.on('connection', function (appSocket) {
                                 switch (firmware) {
                                 case 'repetier':
                                     break;
-                                case 'marlin':
+                                case 'marlinkimbra':
                                     break;
                                 }
                             } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
@@ -1579,7 +1587,7 @@ io.sockets.on('connection', function (appSocket) {
                                 case 'repetier':
                                     io.sockets.emit('data', data);
                                     break;
-                                case 'marlin':
+                                case 'marlinkimbra':
                                     io.sockets.emit('data', data);
                                     break;
                                 }
@@ -1725,7 +1733,7 @@ io.sockets.on('connection', function (appSocket) {
                     send1Q();
                     break;
                 case 'repetier':
-                case 'marlin':
+                case 'marlinkimbra':
                     addQ('G91');
                     addQ('G0' + feed + dir + dist);
                     addQ('G90');
@@ -1773,7 +1781,7 @@ io.sockets.on('connection', function (appSocket) {
                     send1Q();
                     break;
                 case 'repetier':
-                case 'marlin':
+                case 'marlinkimbra':
                     addQ('G9' + mode);
                     addQ('G0' + feed + xVal + yVal + zVal);
                     addQ('G90');
@@ -1815,7 +1823,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'repetier':
                     addQ('G92');
                     break;
-                case 'marlin':
+                case 'marlinkimbra':
                     addQ('G92 X0 Y0 Z0');
                     break;
                 default:
@@ -1917,7 +1925,7 @@ io.sockets.on('connection', function (appSocket) {
             case 'tinyg':
                 break;
             case 'repetier':
-            case 'marlin':
+            case 'marlinkimbra':
                 if (data === 0) {
                     feedOverride = 100;
                 } else {
@@ -1991,7 +1999,7 @@ io.sockets.on('connection', function (appSocket) {
             case 'tinyg':
                 break;
             case 'repetier':
-            case 'marlin':
+            case 'marlinkimbra':
                 if (data === 0) {
                     spindleOverride = 100;
                 } else {
@@ -2076,14 +2084,15 @@ io.sockets.on('connection', function (appSocket) {
                             send1Q();
                             break;
                         case 'repetier':
-                        case 'marlin':
+                        case 'marlinkimbra':
                             addQ('G1F1');
-                            addQ('M3S' + parseInt(power * maxS / 100));
+                            addQ('M3 S' + parseInt(power * maxS / 100));
+                            addQ('M4');
                             laserTestOn = true;
                             appSocket.emit('laserTest', power);
                             if (duration > 0) {
                                 addQ('G4 P' + duration / 1000);
-                                addQ('M5S0');
+                                addQ('M5');
                                 laserTestOn = false;
                                 setTimeout(function () {
                                     laserTestOn = false;
@@ -2111,8 +2120,8 @@ io.sockets.on('connection', function (appSocket) {
                         send1Q();
                         break;
                     case 'repetier':
-                    case 'marlin':
-                        addQ('M5S0');
+                    case 'marlinkimbra':
+                        addQ('M5');
                         send1Q();
                         break;
                     }
@@ -2150,7 +2159,8 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: !', 2);
                 break;
             case 'repetier':
-            case 'marlin':
+            case 'marlinkimbra':
+                // just stop sending gcodes
                 break;
             }
             io.sockets.emit('runStatus', 'paused');
@@ -2180,7 +2190,7 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: ~', 2);
                 break;
             case 'repetier':
-            case 'marlin':
+            case 'marlinkimbra':
                 break;
             }
             paused = false;
@@ -2241,7 +2251,7 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: %', 2);
                 break;
             case 'repetier':
-            case 'marlin':
+            case 'marlinkimbra':
                 paused = true;
                 machineSend('M112/n'); // hold
                 writeLog('Sent: M112', 2);
@@ -2291,7 +2301,7 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog('Sent: $X', 2);
                     break;
                 case 'repetier':
-                case 'marlin':
+                case 'marlinkimbra':
                     machineSend('M112\n');
                     writeLog('Sent: M112', 2);
                     break;
@@ -2332,7 +2342,7 @@ io.sockets.on('connection', function (appSocket) {
                     paused = false;
                     break;
                 case 'repetier':
-                case 'marlin':
+                case 'marlinkimbra':
                     machineSend('M112/b');
                     writeLog('Sent: M112', 2);
                     blocked = false;
@@ -2366,7 +2376,7 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'repetier':
-            case 'marlin':
+            case 'marlinkimbra':
                 machineSend('M112/n');
                 writeLog('Sent: M112', 2);
                 break;
@@ -2559,7 +2569,7 @@ function send1Q() {
             }
             break;
         case 'repetier':
-        case 'marlin':
+        case 'marlinkimbra':
             while (reprapBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
                 gcode = gcodeQueue.shift();
                 machineSend(gcode + '\n');
