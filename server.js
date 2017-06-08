@@ -287,8 +287,12 @@ io.sockets.on('connection', function (appSocket) {
                 port.on('open', function () {
                     io.sockets.emit('activePort', {port: port.path, baudrate: port.options.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
-                    //machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for grbl-lpc)
-                    machineSend('\n'); // this causes smoothie to send the welcome string
+                    if (config.resetOnConnect == 1) {
+                        port.write(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                        writeLog('Sent: ctrl-x', 1);
+                    } else {
+                        machineSend('\n'); // this causes smoothie to send the welcome string
+                    }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
