@@ -2295,7 +2295,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.list', function () {  // List SD content
+    appSocket.on('sd.list', function () {  // List SD content
         if (isConnected) {
             writeLog(chalk.red('sd.list'), 1);
             switch (firmware) {
@@ -2313,7 +2313,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.cd', function (data) {  // Change directory
+    appSocket.on('sd.cd', function (data) {  // Change directory
         if (isConnected) {
             writeLog(chalk.red('sd.cd'), 1);
             switch (firmware) {
@@ -2329,7 +2329,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.rm', function (data) {  // Delete file
+    appSocket.on('sd.rm', function (data) {  // Delete file
         if (isConnected) {
             writeLog(chalk.red('sd.rm'), 1);
             switch (firmware) {
@@ -2345,7 +2345,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.mv', function (data) {  // Rename/move file
+    appSocket.on('sd.mv', function (data) {  // Rename/move file
         if (isConnected) {
             writeLog(chalk.red('sd.mv'), 1);
             switch (firmware) {
@@ -2361,7 +2361,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.play', function (data) {  // Play file
+    appSocket.on('sd.play', function (data) {  // Play file
         if (isConnected) {
             writeLog(chalk.red('sd.play'), 1);
             switch (firmware) {
@@ -2381,7 +2381,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.pause', function () {  // Abort SD print
+    appSocket.on('sd.pause', function () {  // Abort SD print
         if (isConnected) {
             writeLog(chalk.red('sd.abort'), 1);
             switch (firmware) {
@@ -2399,7 +2399,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.resume', function () {  // Resume SD print
+    appSocket.on('sd.resume', function () {  // Resume SD print
         if (isConnected) {
             writeLog(chalk.red('sd.resume'), 1);
             switch (firmware) {
@@ -2417,7 +2417,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.abort', function () {  // Abort SD print
+    appSocket.on('sd.abort', function () {  // Abort SD print
         if (isConnected) {
             writeLog(chalk.red('sd.abort'), 1);
             switch (firmware) {
@@ -2435,7 +2435,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.upload', function (data) {  // Upload file to SD
+    appSocket.on('sd.upload', function (data) {  // Upload file to SD
         if (isConnected) {
             writeLog(chalk.red('sd.upload'), 1);
             switch (firmware) {
@@ -2456,7 +2456,7 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocked.on('sd.progress', function (data) {  // Get SD print progress
+    appSocket.on('sd.progress', function (data) {  // Get SD print progress
         if (isConnected) {
             writeLog(chalk.red('sd.progtress'), 1);
             switch (firmware) {
