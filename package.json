@@ -4,6 +4,10 @@
   "description": "Unified communications server for LaserWeb/CNCweb",
   "author": "Claudio Prezzi",
   "contributors": [
+    "Peter van der Walt <peter.plaaswerf@gmail.com>",
+    "Sébastien Mischler <sebastien@onlfait.ch>",
+    "Todd Fleming <jscut.org>",
+    "Jorge Robles <jorge.diego.robles@gmail.com>",
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
   ],
   "license": "AGPL-3.0",
@@ -23,7 +27,7 @@
     "node-static": "*",
     "request": "*",
     "serialport": "^4.0.7",
-    "socket.io": "*",
+    "socket.io": "1.7.x",
     "ws": "^1.1.1"
   },
   "devDependencies": {},
@@ -33,6 +37,13 @@
   "homepage": "https://github.com/LaserWeb/lw.comm-server#readme",
   "main": "server.js",
   "scripts": {
+    "dist": "npm run copy && build",
+    "distmac": "npm run copy && build --mac ",
+    "distwinx86": "npm run copy && build --win --ia32 ",
+    "distwinx64": "npm run copy && build --win --x64",
+    "distlinx86": "npm run copy && build --linux --ia32 ",
+    "distlinx64": "npm run copy && build --linux --x64",
+    "copy": "ncp ../LaserWeb4/dist/ app/ --limit=6",
     "start": "node server.js",
     "update_lw4": "git rm app/ -r -f && cp ../LaserWeb4/dist/. app/ -r -u && git add app/",
     "test": "echo \"Error: no test specified\" && exit 1"
