@@ -1756,6 +1756,97 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
+
+    appSocket.on('home', function (data) {
+        writeLog(chalk.red('home(' + data + ')'), 1);
+        if (isConnected) {
+            switch (data) {
+            case 'x':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 X');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'y':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 Y');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'z':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 Z');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'a':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 E1');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'all': // XYZ only!!
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 X Y Z');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'xyza':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 X Y Z E');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            }
+            send1Q();
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
     
     appSocket.on('feedOverride', function (data) {
         if (isConnected) {
