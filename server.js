@@ -311,7 +311,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }, 500);
                         }
-                    }, 500);
+                    }, 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
                             // Close port if we don't detect supported firmware after 2s.
