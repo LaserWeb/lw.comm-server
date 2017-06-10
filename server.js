@@ -1951,6 +1951,9 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'all': // XYZ only!!
                 switch (firmware) {
+                case 'grbl':
+                    addQ('$H');
+                    break;
                 case 'smothie':
                 case 'repetier':
                 case 'marlinkimbra':
@@ -1964,6 +1967,9 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'xyza':
                 switch (firmware) {
+                case 'grbl':
+                    addQ('$H');
+                    break;
                 case 'smothie':
                 case 'repetier':
                 case 'marlinkimbra':
@@ -1974,6 +1980,39 @@ io.sockets.on('connection', function (appSocket) {
                     appSocket.emit('error', 'Command not supported by firmware!');
                     break;
                 }
+                break;
+            }
+            send1Q();
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
+    appSocket.on('probe', function (data) {
+        writeLog(chalk.red('probe(' + JSON.stringify(data) + ')'), 1);
+        if (isConnected) {
+            switch (firmware) {
+            case 'smothie':
+                switch (data.direction) {
+                case 'z':
+                    addQ('G30 Z' + data.probeOffset);
+                    break;
+                default:
+                    addQ('G38.2 ' + data.direction);
+                    break;
+            case 'grbl':
+                addQ('G38.2 ' + data.direction + '-5 F1');
+                addQ('G92 ' + data.direction + ' ' + data.probeOffset);
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G38.2 ' + data.direction + '-5 F1');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
                 break;
             }
             send1Q();
