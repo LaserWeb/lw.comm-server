@@ -710,9 +710,10 @@ io.sockets.on('connection', function (appSocket) {
                     } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                         switch (firmware) {
                         case 'grbl':
-                            var alarmCode = data.split(':')[1];
-                            writeLog('ALARM:' + grblStrings.alarms(alarmCode));
-                            io.sockets.emit('data', 'ALARM:' + grblStrings.alarms(alarmCode));
+                            grblBufferSize.shift();
+                            var alarmCode = parseInt(data.split(':')[1]);
+                            writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                            io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
                             break;
                         case 'smoothie':
                             io.sockets.emit('data', data);
@@ -740,9 +741,9 @@ io.sockets.on('connection', function (appSocket) {
                         switch (firmware) {
                         case 'grbl':
                             grblBufferSize.shift();
-                            var errorCode = data.split(':')[1];
-                            writeLog('error:' + grblStrings.errors(errorCode));
-                            io.sockets.emit('data', 'error:' + grblStrings.errors(errorCode));
+                            var errorCode = parseInt(data.split(':')[1]);
+                            writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                            io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
                             break;
                         case 'smoothie':
                             io.sockets.emit('data', data);
@@ -1116,9 +1117,9 @@ io.sockets.on('connection', function (appSocket) {
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                             switch (firmware) {
                             case 'grbl':
-                                var alarmCode = data.split(':')[1];
-                                writeLog('ALARM:' + grblStrings.alarms(alarmCode));
-                                io.sockets.emit('data', 'ALARM:' + grblStrings.alarms(alarmCode));
+                                var alarmCode = parseInt(data.split(':')[1]);
+                                writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                                io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
                                 break;
                             case 'smoothie':
                                 io.sockets.emit('data', data);
@@ -1146,9 +1147,9 @@ io.sockets.on('connection', function (appSocket) {
                             switch (firmware) {
                             case 'grbl':
                                 grblBufferSize.shift();
-                                var errorCode = data.split(':')[1];
-                                writeLog('error:' + grblStrings.errors(errorCode));
-                                io.sockets.emit('data', 'error:' + grblStrings.errors(errorCode));
+                                var errorCode = parseInt(data.split(':')[1]);
+                                writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                                io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
                                 break;
                             case 'smoothie':
                                 io.sockets.emit('data', data);
@@ -1563,9 +1564,9 @@ io.sockets.on('connection', function (appSocket) {
                             } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                                 switch (firmware) {
                                 case 'grbl':
-                                    var alarmCode = data.split(':')[1];
-                                    writeLog('ALARM:' + grblStrings.alarms(alarmCode));
-                                    io.sockets.emit('data', 'ALARM:' + grblStrings.alarms(alarmCode));
+                                    var alarmCode = parseInt(data.split(':')[1]);
+                                    writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                                    io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
                                     break;
                                 case 'smoothie':
                                     io.sockets.emit('data', data);
@@ -1593,9 +1594,9 @@ io.sockets.on('connection', function (appSocket) {
                                 switch (firmware) {
                                 case 'grbl':
                                     grblBufferSize.shift();
-                                    var errorCode = data.split(':')[1];
-                                    writeLog('error:' + grblStrings.errors(errorCode));
-                                    io.sockets.emit('data', 'error:' + grblStrings.errors(errorCode));
+                                    var errorCode = parseInt(data.split(':')[1]);
+                                    writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                                    io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
                                     break;
                                 case 'smoothie':
                                     io.sockets.emit('data', data);
@@ -2002,6 +2003,7 @@ io.sockets.on('connection', function (appSocket) {
                 default:
                     addQ('G38.2 ' + data.direction);
                     break;
+                }
             case 'grbl':
                 addQ('G38.2 ' + data.direction + '-5 F1');
                 addQ('G92 ' + data.direction + ' ' + data.probeOffset);
