@@ -58,8 +58,19 @@ npm run dist
 
 ## Subsequent Updates
 
-1.  `cd LaserWeb4 && git pull && npm run installdev && npm run install`
+1.  `cd LaserWeb4 && git reset --hard && git pull && npm run installdev`
 2.  `npm run bundle-dev`
-3.  `cd ../lw.comm-server && git pull && npm install`
+3.  `cd ../lw.comm-server && git reset --hard && git pull && npm install`
 4. `./node_modules/.bin/electron-rebuild`
 5.  `npm run dist`
+
+## Quick update
+
+```
+#!bin/bash
+cd LaserWeb4 && git reset --hard && git pull && npm run installdev && npm run bundle-dev && cd ..
+cd lw.comm-server  && git reset --hard && git pull && npm install && ./node_modules/.bin/electron-rebuild
+#if you need
+#npm run dist
+
+```

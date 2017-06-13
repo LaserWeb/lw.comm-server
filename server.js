@@ -47,11 +47,11 @@ var grblStrings = require('./grblStrings.js');
 var logFile;
 var connectionType, connections = [];
 var gcodeQueue = [];
-var port, isConnected, connectedTo;
+var port, isConnected, connectedTo, portsList;
 var machineSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
-var statusLoop, queueCounter;
+var statusLoop, queueCounter, listPortsLoop;
 var lastSent = '', paused = false, blocked = false;
 
 var firmware, fVersion, fDate;
@@ -78,11 +78,16 @@ var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
 var smoothie_buffer = false;
 var lastMode;
 
-var TINYG_RX_BUFFER_SIZE = 4;       // max. lines of gcode to send before wait for ok
+var TINYG_RX_BUFFER_SIZE = 24;              // max. lines of gcode to send before wait for ok
 var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
 var jsObject;
 
-var xPos = 0, yPos = 0, zPos = 0;
+var REPRAP_RX_BUFFER_SIZE = 2;                  // max. lines of gcode to send before wait for ok
+var reprapBufferSize = REPRAP_RX_BUFFER_SIZE;   // init space left
+var reprapWaitForPos = false;
+
+var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
+var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 
 const path = require('path');
 
@@ -151,25 +156,38 @@ var io = websockets.listen(app);
 // WebSocket connection from frontend
 io.sockets.on('connection', function (appSocket) {
 
-    writeLog(chalk.yellow('App connected!'), 1);
-
     // save new connection
     connections.push(appSocket);
+    writeLog(chalk.yellow('App connected! (id=' + connections.indexOf(appSocket) + ')'), 1);
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
 
-    // send available ports
+    // check available ports
     serialport.list(function (err, ports) {
-        appSocket.emit('ports', ports);
+        portsList = ports;
+        appSocket.emit('ports', portsList);
     });
+    // reckeck ports every 2s
+    listPortsLoop = setInterval(function () {
+        serialport.list(function (err, ports) {
+            if (JSON.stringify(ports) != JSON.stringify(portsList)) {
+                portsList = ports;
+                io.sockets.emit('ports', ports);
+                writeLog(chalk.yellow('Ports changed: ' + JSON.stringify(ports)), 1);
+            }
+        });
+    }, 2000);
 
     if (isConnected) {
         appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
         if (port) {
             appSocket.emit('connectStatus', 'opened:' + port.path);
+            appSocket.emit('activePort', port.path);
+            appSocket.emit('activeBaudRate', port.options.baudRate);
         } else {
             appSocket.emit('connectStatus', 'opened:' + connectedTo);
+            appSocket.emit('activeIP', connectedTo);
         }
         if (runningJob) {
             appSocket.emit('runningJob', runningJob);
@@ -280,34 +298,49 @@ io.sockets.on('connection', function (appSocket) {
                 port.on('open', function () {
                     io.sockets.emit('activePort', {port: port.path, baudrate: port.options.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
-                    //machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for grbl-lpc)
-                    machineSend('\n'); // this causes smoothie to send the welcome string
+                    if (config.resetOnConnect == 1) {
+                        port.write(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                        writeLog('Sent: ctrl-x', 1);
+                    } else {
+                        machineSend('\n'); // this causes smoothie to send the welcome string
+                    }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
-                                    machineSend('{"fb":""}\n'); // Check if it's TinyG
-                                    writeLog('Sent: $fb', 2);
+                                    machineSend('{fb:n}\n'); // Check if it's TinyG
+                                    writeLog('Sent: {fb:n}', 2);
+                                    setTimeout(function () {  // Wait for TinyG to answer
+                                        if (!firmware) {     // If still not set
+                                            machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                                            reprapBufferSize--;
+                                            writeLog('Sent: M115', 2);
+                                        }
+                                    }, 1000);
                                 }
                             }, 500);
                         }
                     }, 500);
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing port ' + port.path, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
-                            io.sockets.emit('connectStatus', 'closing:' + port.path);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            port.close();
-                        }
-                    }, 2000);
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing port ' + port.path, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
+                                io.sockets.emit('connectStatus', 'closing:' + port.path);
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                                reprapWaitForPos = false;
+                                port.close();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
                     // machineSend("M115\n");    // Lets check if its Marlin?
 
                     writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
@@ -346,18 +379,20 @@ io.sockets.on('connection', function (appSocket) {
                         if (firmware === 'grbl') {
                             grblBufferSize.shift();
                         }
+                        if (firmware === 'repetier' || firmware === 'marlinkimbra') {
+                            reprapBufferSize++;
+                        }
                         blocked = false;
                         send1Q();
                     } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
                         var state = data.substring(1, data.search(/(,|\|)/));
                         //appSocket.emit('runStatus', state);
                         io.sockets.emit('data', data);
-
                         // Extract wPos
                         var startWPos = data.search(/wpos:/i) + 5;
                         var wPos;
                         if (startWPos > 5) {
-                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                         }
                         if (Array.isArray(wPos)) {
                             var send = true;
@@ -373,30 +408,57 @@ io.sockets.on('connection', function (appSocket) {
                                 zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
                                 send = true;
                             }
+                            if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                send = true;
+                            }
                             if (send) {
-								if (polarTransformation) {
-									writeLog('cartesianTransform(' + xPos + ',' + yPos + ')', 1);
-									var xy = cartesianTransform(xPos, yPos);
-									xPos = xy.x;
-									yPos = xy.y;
-								}
-                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                             }
                         }
-
-//                            // Extract mPos
-//                            var startMPos = data.search(/mpos:/i) + 5;
-//                            var mPos;
-//                            if (startMPos > 5) {
-//                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 3);
-//                            }
-//                            if (Array.isArray(mPos)) {
-//                                xPos = parseFloat(mPos[0]).toFixed(4);
-//                                yPos = parseFloat(mPos[1]).toFixed(4);
-//                                zPos = parseFloat(mPos[2]).toFixed(4);
-//                                appSocket.emit('mPos', xPos + ',' + yPos + ',' + zPos);
-//                            }
-
+                        // Extract mPos (for smoothieware only!)
+                        var startMPos = data.search(/mpos:/i) + 5;
+                        var mPos;
+                        if (startMPos > 5) {
+                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(mPos)) {
+                            var send = false;
+                            if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
+                        // Extract work offset (for Grbl > 1.1 only!)
+                        var startWCO = data.search(/wco:/i) + 4;
+                        var wco;
+                        if (startWCO > 4) {
+                            wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                        }
+                        if (Array.isArray(wco)) {
+                            xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                            yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                            zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                            aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                            if (send) {
+                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            }
+                        }
                         // Extract override values (for Grbl > v1.1 only!)
                         var startOv = data.search(/ov:/i) + 3;
                         if (startOv > 3) {
@@ -413,7 +475,6 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }
-
                         // Extract realtime Feed and Spindle (for Grbl > v1.1 only!)
                         var startFS = data.search(/FS:/i) + 3;
                         if (startFS > 3) {
@@ -427,7 +488,39 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }
-
+                    } else if (data.indexOf('X') === 0) {   // Extract wPos for Repetier
+                        var pos;
+                        var startPos = data.search(/x:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (xPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                xPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        var startPos = data.search(/y:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (yPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                yPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        var startPos = data.search(/z:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (zPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                zPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        var startPos = data.search(/e:/i) + 2;
+                        if (startPos >= 2) {
+                            pos = data.substr(startPos, 4);
+                            if (aPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                aPos = parseFloat(pos).toFixed(config.posDecimals);
+                            }
+                        }
+                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                        //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
+                        reprapWaitForPos = false;
                     } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                         firmware = 'grbl';
                         fVersion = data.substr(5, 4); // get version
@@ -458,91 +551,173 @@ io.sockets.on('connection', function (appSocket) {
                                 //writeLog('Sent: ?', 2);
                             }
                         }, 250);
+                    } else if (data.indexOf('start') === 0) { // Check if it's RepRap
+                        machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                        reprapBufferSize--;
+                        writeLog('Sent: M115', 2);
+                    } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
+                        firmware = 'repetier';
+                        var startPos = data.search(/repetier_/i) + 9;
+                        fVersion = data.substr(startPos, 4); // get version
+                        fDate = '';
+                        writeLog('Repetier detected (' + fVersion + ')', 1);
+                        io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                        // Start intervall for status queries
+                        statusLoop = setInterval(function () {
+                            if (isConnected) {
+                                if (!reprapWaitForPos && reprapBufferSize > 0) {
+                                    reprapWaitForPos = true;
+                                    machineSend('M114\n'); // query position
+                                    reprapBufferSize--;
+                                    writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                }
+                            }
+                        }, 250);
+                    } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
+                        firmware = 'marlinkimbra';
+                        var startPos = data.search(/mk_/i) + 3;
+                        fVersion = data.substr(startPos, 5); // get version
+                        fDate = '';
+                        writeLog('MarlinKimbra detected (' + fVersion + ')', 1);
+                        io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                        // Start intervall for status queries
+                        statusLoop = setInterval(function () {
+                            if (isConnected) {
+                                if (!reprapWaitForPos && reprapBufferSize >= 0) {
+                                    reprapWaitForPos = true;
+                                    machineSend('M114\n'); // query position
+                                    reprapBufferSize--;
+                                    writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                }
+                            }
+                        }, 250);
                     } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
                         var jsObject = JSON.parse(data);
                         if (jsObject.hasOwnProperty('r')) {
                             var footer = jsObject.f || (jsObject.r && jsObject.r.f);
+                            var responseText;
                             if (footer !== undefined) {
                                 if (footer[1] === 108) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an syntax error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an syntax error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
                                 } else if (footer[1] === 20) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an internal error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an internal error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
                                 } else if (footer[1] === 202) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an TOO SHORT MOVE on line %d", jsObject.r.n) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an TOO SHORT MOVE on line %d", jsObject.r.n);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
                                 } else if (footer[1] === 204) {
-                                    writeLog(
-                                        "InAlarm: " +
-                                        util.format("TinyG reported COMMAND REJECTED BY ALARM '%s'", JSON.stringify(jsObject.r)) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported COMMAND REJECTED BY ALARM '%s'", JSON.stringify(jsObject.r));
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("InAlarm: " + responseText + jsObject, 3);
                                 } else if (footer[1] !== 0) {
-                                    writeLog(
-                                        "Response: " +
-                                        util.format("TinyG reported an error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]) +
-                                        jsObject, 3
-                                    );
+                                    responseText = util.format("TinyG reported an error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                    io.sockets.emit('data', responseText);
+                                    writeLog("Response: " + responseText + jsObject, 3);
+                                } else {
+                                    //io.sockets.emit('data', data);
                                 }
                             }
-
-                            writeLog('Response: ' + jsObject.r + footer, 3);
-
+                            //writeLog('Response: ' + JSON.stringify(jsObject.r) + ', ' + footer, 3);
                             jsObject = jsObject.r;
 
                             tinygBufferSize++;
                             blocked = false;
                             send1Q();
                         }
-
-                        if (jsObject.hasOwnProperty('er')) {
-                            writeLog('errorReport ' + jsObject.er, 3);
-                        }
-                        if (jsObject.hasOwnProperty('sr')) {
-                            writeLog('statusChanged ' + jsObject.sr, 3);
-                            var jsObject = JSON.parse(data);
-                            if (jsObject.sr.posx) {
-                                xPos = parseFloat(jsObject.sr.posx).toFixed(4);
+                        if (jsObject.hasOwnProperty('sr')) {    // status report
+                            //writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
+                            var send = false;
+                            if (jsObject.sr.posx != null) {
+                                xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
+                                send = true;
                             }
-                            if (jsObject.sr.posy) {
-                                yPos = parseFloat(jsObject.sr.posy).toFixed(4);
+                            if (jsObject.sr.posy != null) {
+                                yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
+                                send = true;
                             }
-                            if (jsObject.sr.posz) {
-                                zPos = parseFloat(jsObject.sr.posz).toFixed(4);
+                            if (jsObject.sr.posz != null) {
+                                zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
+                                send = true;
                             }
-                            io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                            if (jsObject.sr.posa != null) {
+                                aPos = parseFloat(jsObject.sr.posa).toFixed(config.posDecimals);
+                                send = true;
+                            }
+                            if (send) {
+                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                //writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos + ', ' + aPos, 3);
+                            }
+                            if (jsObject.sr.stat) {
+                                var status = null;
+                                switch (jsObject.sr.stat) {
+                                    case 0:     // initializing
+                                        status = 'Init';
+                                        break;
+                                    case 1:     // ready
+                                        status = 'Idle';
+                                        break;
+                                    case 2:     // shutdown
+                                        status = 'Alarm';
+                                        break;
+                                    case 3:     // stop
+                                        status = 'Idle';
+                                        break;
+                                    case 4:     // end
+                                        status = 'Idle';
+                                        break;
+                                    case 5:     // run
+                                        status = 'Run';
+                                        break;
+                                    case 6:     // hold
+                                        status = 'Hold';
+                                        break;
+                                    case 7:     // probe cycle
+                                        status = 'Probe';
+                                        break;
+                                    case 8:     // running / cycling
+                                        status = 'Run';
+                                        break;
+                                    case 9:     // homing
+                                        status = 'Home';
+                                        break;
+                                }
+                                if (status) {
+                                    io.sockets.emit('data', '<' + status + ',>');
+                                    //writeLog('Status: ' + status, 3);
+                                }
+                            }
                         }
-                        if (jsObject.hasOwnProperty('gc')) {
-                            writeLog('gcodeReceived ' + jsObject.gc, 3);
-                        }
-                        if (jsObject.hasOwnProperty('rx')) {
-                            writeLog('rxReceived ' + jsObject.rx, 3);
-                        }
-                        if (jsObject.hasOwnProperty('fb')) { // TinyG detected
+                        if (jsObject.hasOwnProperty('fb')) {    // firmware
                             firmware = 'tinyg';
                             fVersion = jsObject.fb;
                             fDate = '';
                             writeLog('TinyG detected (' + fVersion + ')', 1);
                             io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
                             // Start intervall for status queries
-                            statusLoop = setInterval(function () {
-                                if (isConnected) {
-                                    machineSend('{"sr":null}\n');
-                                    //writeLog('Sent: {"sr":null}', 2);
-                                }
-                            }, 250);
+//                            statusLoop = setInterval(function () {
+//                                if (isConnected) {
+//                                    machineSend('{sr:n}\n');
+//                                    //writeLog('Sent: {"sr":null}', 2);
+//                                }
+//                            }, 250);
                         }
-                        io.sockets.emit('data', data);
+                        if (jsObject.hasOwnProperty('gc')) {
+                            writeLog('gcodeReceived ' + jsObject.r.gc, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        if (jsObject.hasOwnProperty('rx')) {
+                            writeLog('rxReceived ' + jsObject.r.rx, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        if (jsObject.hasOwnProperty('er')) {
+                            writeLog('errorReport ' + jsObject.er, 3);
+                            io.sockets.emit('data', data);
+                        }
+                        //io.sockets.emit('data', data);
                     } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                         switch (firmware) {
                         case 'grbl':
@@ -556,32 +731,22 @@ io.sockets.on('connection', function (appSocket) {
                         case 'tinyg':
                             io.sockets.emit('data', data);
                             break;
+                        case 'repetier':
+                            io.sockets.emit('data', data);
+                            break;
+                        case 'marlinkimbra':
+                            io.sockets.emit('data', data);
+                            break;
                         }
-//                        data = data.split(':');
-//                        io.sockets.emit('alarm', data[1]);
-//                        writeLog('Emptying Queue', 1);
-//                        gcodeQueue.length = 0; // dump the queye
-//                        grblBufferSize.length = 0; // dump bufferSizes
-//                        tinygBufferSize = TINYG_RX_BUFFER_SIZE;
-//                        writeLog('Clearing Lockout', 1);
-//                        switch (firmware) {
-//                        case 'grbl':
-//                            machineSend('$X\n');
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        case 'smoothie':
-//                            machineSend('$X\n'); //M999
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        case 'tinyg':
-//                            machineSend('%'); // flush tinyg quere
-//                            machineSend('~'); // resume
-//                            blocked = false;
-//                            paused = false;
-//                            break;
-//                        }
+                    } else if (data.indexOf('wait') === 0) { // Got wait from Repetier -> ignore
+                        // do nothing
+                    } else if (data.indexOf('Resend') === 0) { // Got resend from Repetier -> TODO: resend corresponding line!!!
+                        switch (firmware) {
+                        case 'repetier':
+                            break;
+                        case 'marlinkimbra':
+                            break;
+                        }
                     } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                         switch (firmware) {
                         case 'grbl':
@@ -596,7 +761,15 @@ io.sockets.on('connection', function (appSocket) {
                         case 'tinyg':
                             io.sockets.emit('data', data);
                             break;
+                        case 'repetier':
+                            io.sockets.emit('data', data);
+                            break;
+                        case 'marlinkimbra':
+                            io.sockets.emit('data', data);
+                            break;
                         }
+                    } else if (data === ' ') {
+                        // nothing
                     } else {
                         io.sockets.emit('data', data);
                     }
@@ -615,37 +788,47 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
                     isConnected = true;
                     connectedTo = connectedIp;
-                    machineSocket.write('version\n');
 
-                    // Start intervall for status queries
-//                    statusLoop = setInterval(function () {
-//                        if (isConnected) {
-//                            //machineSocket.write('get pos\n');
-//                        } else {
-//                            clearInterval(statusLoop);
-//                            writeLog(chalk.yellow('WARN: ') + 'Unable to send gcode (not connected to Telnet)', 1);
-//                        }
-//                    }, 250);
-
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
-                            io.sockets.emit('connectStatus', 'closing:' + connectedTo);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            machineSocket.destroy();
+                    setTimeout(function () { //wait for controller to be ready
+                        if (!firmware) { // Grbl should be allready detected
+                            machineSend('version\n'); // Check if it's Smoothieware?
+                            writeLog('Sent: version', 2);
+                            setTimeout(function () {  // Wait for Smoothie to answer
+                                if (!firmware) {     // If still not set
+                                    machineSend('{fb:n}\n'); // Check if it's TinyG
+                                    writeLog('Sent: {fb:n}', 2);
+                                    setTimeout(function () {  // Wait for TinyG to answer
+                                        if (!firmware) {     // If still not set
+                                            machineSend('M115\n'); // Check if it's Repetier
+                                            repetierBufferSize--;
+                                            writeLog('Sent: M115', 2);
+                                        }
+                                    }, 1000);
+                                }
+                            }, 500);
                         }
-                    }, 2000);
+                    }, 500);
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
+                                io.sockets.emit('connectStatus', 'closing:' + connectedTo);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                machineSocket.destroy();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
 
                     // Start interval for qCount messages to appSocket clients
-                    queueCounter = setInterval(function () {
-                        io.sockets.emit('qCount', gcodeQueue.length);
-                    }, 500);
+//                    queueCounter = setInterval(function () {
+//                        io.sockets.emit('qCount', gcodeQueue.length);
+//                    }, 500);
                 });
 
                 machineSocket.on('timeout', function () {
@@ -691,18 +874,23 @@ io.sockets.on('connection', function (appSocket) {
                         data = responseArray.shift();
                         writeLog('Telnet: ' + data, 3);
                         if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
+                            if (firmware === 'grbl') {
+                                grblBufferSize.shift();
+                            }
+                            if (firmware === 'repetier' || firmware === 'marlinkimbra') {
+                                reprapBufferSize++;
+                            }
                             blocked = false;
                             send1Q();
                         } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
                             var state = data.substring(1, data.search(/(,|\|)/));
                             //appSocket.emit('runStatus', state);
                             io.sockets.emit('data', data);
-
                             // Extract wPos
                             var startWPos = data.search(/wpos:/i) + 5;
                             var wPos;
                             if (startWPos > 5) {
-                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                             }
                             if (Array.isArray(wPos)) {
                                 var send = true;
@@ -718,11 +906,57 @@ io.sockets.on('connection', function (appSocket) {
                                     zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
                                     send = true;
                                 }
+                                if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                    aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
                                 if (send) {
-                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                                 }
                             }
-
+                            // Extract mPos (for smoothieware only!)
+                            var startMPos = data.search(/mpos:/i) + 5;
+                            var mPos;
+                            if (startMPos > 5) {
+                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(mPos)) {
+                                var send = false;
+                                if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                    xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                    yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                    zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                    aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                }
+                            }
+                            // Extract work offset (for Grbl > 1.1 only!)
+                            var startWCO = data.search(/wco:/i) + 4;
+                            var wco;
+                            if (startWCO > 4) {
+                                wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(wco)) {
+                                xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                                yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                                zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                                aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                }
+                            }
                             // Extract override values (for Grbl > v1.1 only!)
                             var startOv = data.search(/ov:/i) + 3;
                             if (startOv > 3) {
@@ -739,7 +973,6 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }
                             }
-
                             // Extract realtime Feed and Spindle (for Grbl > v1.1 only!)
                             var startFS = data.search(/FS:/i) + 3;
                             if (startFS > 3) {
@@ -752,6 +985,75 @@ io.sockets.on('connection', function (appSocket) {
                                         io.sockets.emit('realSpindle', fs[1]);
                                     }
                                 }
+                            }
+                        } else if (data.indexOf('X') === 0) {   // Extract wPos for Repetier
+                            var pos;
+                            var startPos = data.search(/x:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (xPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    xPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            var startPos = data.search(/y:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (yPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    yPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            var startPos = data.search(/z:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (zPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    zPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            var startPos = data.search(/e:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (aPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    aPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                            //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
+                            reprapWaitForPos = false;
+                        } else if (data.indexOf('WCS:') >= 0) {
+                            //console.log('Telnet:', response);
+                            // IN: "last C: X:0.0000 Y:-0.0000 Z:0.0000 realtime WCS: X:0.0000 Y:0.0045 Z:0.0000 MCS: X:44.2000 Y:76.5125 Z:0.0000 APOS: X:44.2000 Y:76.5125 Z:0.0000 MP: X:44.2000 Y:76.5080 Z:0.0000 CMP: X:44.2000 Y:76.5080 Z:0.0000"
+                            // OUT: "<Run,MPos:49.5756,279.7644,-15.0000,WPos:0.0000,0.0000,0.0000>"
+                            var startPos = data.search(/wcs: /i) + 5;
+                            var wpos;
+                            if (startPos > 5) {
+                                wpos = data.substr(startPos).split(/:| /, 6);
+                            }
+                            if (Array.isArray(wpos)) {
+                                var wxpos = parseFloat(wpos[1]).toFixed(2);
+                                var wypos = parseFloat(wpos[3]).toFixed(2);
+                                var wzpos = parseFloat(wpos[5]).toFixed(2);
+                                var wapos = parseFloat(wpos[7]).toFixed(2);
+                                var wpos = wxpos + ',' + wypos + ',' + wzpos + ',' + wapos;
+                                writeLog('Telnet: ' + 'WPos:' + wpos, 1);
+                                io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos, a: wapos});
+                            }
+                        } else if (data.indexOf('MCS:') >= 0) {
+                            //console.log('Telnet:', response);
+                            // IN: "last C: X:0.0000 Y:-0.0000 Z:0.0000 realtime WCS: X:0.0000 Y:0.0045 Z:0.0000 MCS: X:44.2000 Y:76.5125 Z:0.0000 APOS: X:44.2000 Y:76.5125 Z:0.0000 MP: X:44.2000 Y:76.5080 Z:0.0000 CMP: X:44.2000 Y:76.5080 Z:0.0000"
+                            // OUT: "<Run,MPos:49.5756,279.7644,-15.0000,WPos:0.0000,0.0000,0.0000>"
+                            var startPos = data.search(/mcs: /i) + 5;
+                            var mpos;
+                            if (startPos > 5) {
+                                mpos = data.substr(startPos).split(/:| /, 6);
+                            }
+                            if (Array.isArray(wpos)) {
+                                var mxpos = parseFloat(mpos[1]).toFixed(2);
+                                var mypos = parseFloat(mpos[3]).toFixed(2);
+                                var mzpos = parseFloat(mpos[5]).toFixed(2);
+                                var mapos = parseFloat(mpos[7]).toFixed(2);
+                                var mpos = mxpos + ',' + mypos + ',' + mzpos + ',' + mapos;
+                                writeLog('Telnet: ' + 'MPos:' + mpos, 1);
+                                io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos, a: mapos});
                             }
                         } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                             firmware = 'grbl';
@@ -782,40 +1084,46 @@ io.sockets.on('connection', function (appSocket) {
                                     machineSend('get status\n');
                                 }
                             }, 250);
-                        } else if (data.indexOf('WCS:') >= 0) {
-                            //console.log('Telnet:', response);
-                            // IN: "last C: X:0.0000 Y:-0.0000 Z:0.0000 realtime WCS: X:0.0000 Y:0.0045 Z:0.0000 MCS: X:44.2000 Y:76.5125 Z:0.0000 APOS: X:44.2000 Y:76.5125 Z:0.0000 MP: X:44.2000 Y:76.5080 Z:0.0000 CMP: X:44.2000 Y:76.5080 Z:0.0000"
-                            // OUT: "<Run,MPos:49.5756,279.7644,-15.0000,WPos:0.0000,0.0000,0.0000>"
-                            var startPos = data.search(/wcs: /i) + 5;
-                            var wpos;
-                            if (startPos > 5) {
-                                wpos = data.substr(startPos).split(/:| /, 6);
-                            }
-                            if (Array.isArray(wpos)) {
-                                var wxpos = parseFloat(wpos[1]).toFixed(2);
-                                var wypos = parseFloat(wpos[3]).toFixed(2);
-                                var wzpos = parseFloat(wpos[5]).toFixed(2);
-                                var wpos = wxpos + ',' + wypos + ',' + wzpos;
-                                writeLog('Telnet: ' + 'WPos:' + wpos, 1);
-                                io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos});
-                            }
-                        } else if (data.indexOf('MCS:') >= 0) {
-                            //console.log('Telnet:', response);
-                            // IN: "last C: X:0.0000 Y:-0.0000 Z:0.0000 realtime WCS: X:0.0000 Y:0.0045 Z:0.0000 MCS: X:44.2000 Y:76.5125 Z:0.0000 APOS: X:44.2000 Y:76.5125 Z:0.0000 MP: X:44.2000 Y:76.5080 Z:0.0000 CMP: X:44.2000 Y:76.5080 Z:0.0000"
-                            // OUT: "<Run,MPos:49.5756,279.7644,-15.0000,WPos:0.0000,0.0000,0.0000>"
-                            var startPos = data.search(/mcs: /i) + 5;
-                            var mpos;
-                            if (startPos > 5) {
-                                mpos = data.substr(startPos).split(/:| /, 6);
-                            }
-                            if (Array.isArray(wpos)) {
-                                var mxpos = parseFloat(mpos[1]).toFixed(2);
-                                var mypos = parseFloat(mpos[3]).toFixed(2);
-                                var mzpos = parseFloat(mpos[5]).toFixed(2);
-                                var mpos = mxpos + ',' + mypos + ',' + mzpos;
-                                writeLog('Telnet: ' + 'MPos:' + mpos, 1);
-                                io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos});
-                            }
+                        } else if (data.indexOf('start') === 0) { // Check if it's RepRap
+                            machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                            reprapBufferSize--;
+                            writeLog('Sent: M115', 2);
+                        } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
+                            firmware = 'repetier';
+                            var startPos = data.search(/repetier_/i) + 9;
+                            fVersion = data.substr(startPos, 4); // get version
+                            fDate = '';
+                            writeLog('Repetier detected (' + fVersion + ')', 1);
+                            io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                            // Start intervall for status queries
+                            statusLoop = setInterval(function () {
+                                if (isConnected) {
+                                    if (!reprapWaitForPos && reprapBufferSize > 0) {
+                                        reprapWaitForPos = true;
+                                        machineSend('M114\n'); // query position
+                                        reprapBufferSize--;
+                                        writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                    }
+                                }
+                            }, 250);
+                        } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
+                            firmware = 'marlinkimbra';
+                            var startPos = data.search(/mk_/i) + 3;
+                            fVersion = data.substr(startPos, 5); // get version
+                            fDate = '';
+                            writeLog('MarlinKimbra detected (' + fVersion + ')', 1);
+                            io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                            // Start intervall for status queries
+                            statusLoop = setInterval(function () {
+                                if (isConnected) {
+                                    if (!reprapWaitForPos && reprapBufferSize > 0) {
+                                        reprapWaitForPos = true;
+                                        machineSend('M114\n'); // query position
+                                        reprapBufferSize--;
+                                        writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                    }
+                                }
+                            }, 250);
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                             switch (firmware) {
                             case 'grbl':
@@ -828,6 +1136,21 @@ io.sockets.on('connection', function (appSocket) {
                                 break;
                             case 'tinyg':
                                 io.sockets.emit('data', data);
+                                break;
+                            case 'repetier':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'marlinkimbra':
+                                io.sockets.emit('data', data);
+                                break;
+                            }
+                        } else if (data.indexOf('wait') === 0) { // Got wait from Repetier -> ignore
+                            // do nothing
+                        } else if (data.indexOf('Resend') === 0) { // Got resend from Repetier -> TODO: resend corresponding line!!!
+                            switch (firmware) {
+                            case 'repetier':
+                                break;
+                            case 'marlinkimbra':
                                 break;
                             }
                         } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
@@ -842,6 +1165,12 @@ io.sockets.on('connection', function (appSocket) {
                                 io.sockets.emit('data', data);
                                 break;
                             case 'tinyg':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'repetier':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'marlinkimbra':
                                 io.sockets.emit('data', data);
                                 break;
                             }
@@ -871,35 +1200,43 @@ io.sockets.on('connection', function (appSocket) {
                     connectedTo = connectedIp;
                     //machineSend(String.fromCharCode(0x18));
 
-                    setTimeout(function() { //wait for controller to be ready
+                    setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be allready detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
                                 if (!firmware) {     // If still not set
-                                    machineSend('$fb\n'); // Check if it's TinyG
-                                    writeLog('Sent: $fb', 2);
+                                    machineSend('{fb:n}\n'); // Check if it's TinyG
+                                    writeLog('Sent: {fb:n}', 2);
+                                    setTimeout(function () {  // Wait for TinyG to answer
+                                        if (!firmware) {     // If still not set
+                                            machineSend('M115\n'); // Check if it's Repetier
+                                            repetierBufferSize--;
+                                            writeLog('Sent: M115', 2);
+                                        }
+                                    }, 1000);
                                 }
                             }, 500);
                         }
                     }, 500);
-                    // machineSend("M115\n");    // Lets check if its Marlin?
-
-                    setTimeout(function () {
-                        // Close port if we don't detect supported firmware after 2s.
-                        if (!firmware) {
-                            writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
-                            io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
-                            io.sockets.emit('connectStatus', 'closing:' + connectedTo);
-                            gcodeQueue.length = 0; // dump the queye
-                            grblBufferSize.length = 0; // dump bufferSizes
-                            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                            clearInterval(queueCounter);
-                            clearInterval(statusLoop);
-                            machineSocket.close();
-                        }
-                    }, 2000);
-
+                    if (config.firmwareWaitTime > 0) {
+                        setTimeout(function () {
+                            // Close port if we don't detect supported firmware after 2s.
+                            if (!firmware) {
+                                writeLog('No supported firmware detected. Closing connection to ' + connectedTo, 1);
+                                io.sockets.emit('data', 'No supported firmware detected. Closing connection to ' + connectedTo);
+                                io.sockets.emit('connectStatus', 'closing:' + connectedTo);
+                                gcodeQueue.length = 0; // dump the queye
+                                grblBufferSize.length = 0; // dump bufferSizes
+                                tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
+                                repetierWaitForPos = false;
+                                clearInterval(queueCounter);
+                                clearInterval(statusLoop);
+                                machineSocket.close();
+                            }
+                        }, config.firmwareWaitTime * 1000);
+                    }
                 });
 
                 machineSocket.on('close', function (e) {
@@ -934,35 +1271,84 @@ io.sockets.on('connection', function (appSocket) {
                                 if (firmware === 'grbl') {
                                     grblBufferSize.shift();
                                 }
+                                if (firmware === 'repetier' || firmware === 'marlinkimbra') {
+                                    reprapBufferSize++;
+                                }
                                 blocked = false;
                                 send1Q();
                             } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
                                 var state = data.substring(1, data.search(/(,|\|)/));
                                 //appSocket.emit('runStatus', state);
                                 io.sockets.emit('data', data);
-
                                 // Extract wPos
                                 var startWPos = data.search(/wpos:/i) + 5;
                                 var wPos;
                                 if (startWPos > 5) {
-                                    wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 3);
+                                    wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                                 }
                                 if (Array.isArray(wPos)) {
                                     var send = true;
-                                    if (xPos !== parseFloat(wPos[0]).toFixed(4)) {
-                                        xPos = parseFloat(wPos[0]).toFixed(4);
+                                    if (xPos !== parseFloat(wPos[0]).toFixed(config.posDecimals)) {
+                                        xPos = parseFloat(wPos[0]).toFixed(config.posDecimals);
                                         send = true;
                                     }
-                                    if (yPos !== parseFloat(wPos[1]).toFixed(4)) {
-                                        yPos = parseFloat(wPos[1]).toFixed(4);
+                                    if (yPos !== parseFloat(wPos[1]).toFixed(config.posDecimals)) {
+                                        yPos = parseFloat(wPos[1]).toFixed(config.posDecimals);
                                         send = true;
                                     }
-                                    if (zPos !== parseFloat(wPos[2]).toFixed(4)) {
-                                        zPos = parseFloat(wPos[2]).toFixed(4);
+                                    if (zPos !== parseFloat(wPos[2]).toFixed(config.posDecimals)) {
+                                        zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                        aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
                                         send = true;
                                     }
                                     if (send) {
-                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                    }
+                                }
+                                // Extract mPos (for smoothieware only!)
+                                var startMPos = data.search(/mpos:/i) + 5;
+                                var mPos;
+                                if (startMPos > 5) {
+                                    mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                                }
+                                if (Array.isArray(mPos)) {
+                                    var send = false;
+                                    if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                        xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                        yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                        zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                        aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
+                                        send = true;
+                                    }
+                                    if (send) {
+                                        io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                    }
+                                }
+                                // Extract work offset (for Grbl > 1.1 only!)
+                                var startWCO = data.search(/wco:/i) + 4;
+                                var wco;
+                                if (startWCO > 4) {
+                                    wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                                }
+                                if (Array.isArray(wco)) {
+                                    xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                                    yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                                    zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                                    aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                                    if (send) {
+                                        io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                     }
                                 }
                                 // Extract override values (for Grbl > v1.1 only!)
@@ -994,6 +1380,39 @@ io.sockets.on('connection', function (appSocket) {
                                         }
                                     }
                                 }
+                            } else if (data.indexOf('X') === 0) {   // Extract wPos for Repetier
+                                var pos;
+                                var startPos = data.search(/x:/i) + 2;
+                                if (startPos >= 2) {
+                                    pos = data.substr(startPos, 4);
+                                    if (xPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                        xPos = parseFloat(pos).toFixed(config.posDecimals);
+                                    }
+                                }
+                                var startPos = data.search(/y:/i) + 2;
+                                if (startPos >= 2) {
+                                    pos = data.substr(startPos, 4);
+                                    if (yPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                        yPos = parseFloat(pos).toFixed(config.posDecimals);
+                                    }
+                                }
+                                var startPos = data.search(/z:/i) + 2;
+                                if (startPos >= 2) {
+                                    pos = data.substr(startPos, 4);
+                                    if (zPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                        zPos = parseFloat(pos).toFixed(config.posDecimals);
+                                    }
+                                }
+                                var startPos = data.search(/e:/i) + 2;
+                                if (startPos >= 2) {
+                                    pos = data.substr(startPos, 4);
+                                    if (aPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                        aPos = parseFloat(pos).toFixed(config.posDecimals);
+                                    }
+                                }
+                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
+                                reprapWaitForPos = false;
                             } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                                 firmware = 'grbl';
                                 fVersion = data.substr(5, 4); // get version
@@ -1023,6 +1442,46 @@ io.sockets.on('connection', function (appSocket) {
                                 statusLoop = setInterval(function () {
                                     if (isConnected) {
                                         machineSend('?');
+                                    }
+                                }, 250);
+                            } else if (data.indexOf('start') === 0) { // Check if it's RepRap
+                                machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                                reprapBufferSize--;
+                                writeLog('Sent: M115', 2);
+                            } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
+                                firmware = 'repetier';
+                                var startPos = data.search(/repetier_/i) + 9;
+                                fVersion = data.substr(startPos, 4); // get version
+                                fDate = '';
+                                writeLog('Repetier detected (' + fVersion + ')', 1);
+                                io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                                // Start intervall for status queries
+                                statusLoop = setInterval(function () {
+                                    if (isConnected) {
+                                        if (!repetierWaitForPos && repetierBufferSize > 0) {
+                                            repetierWaitForPos = true;
+                                            machineSend('M114\n'); // query position
+                                            repetierBufferSize--;
+                                            writeLog('Sent: M114 (B' + repetierBufferSize + ')', 2);
+                                        }
+                                    }
+                                }, 250);
+                            } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
+                                firmware = 'marlinkimbra';
+                                var startPos = data.search(/mk_/i) + 3;
+                                fVersion = data.substr(startPos, 5); // get version
+                                fDate = '';
+                                writeLog('MarlinKimbra detected (' + fVersion + ')', 1);
+                                io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                                // Start intervall for status queries
+                                statusLoop = setInterval(function () {
+                                    if (isConnected) {
+                                        if (!reprapWaitForPos && reprapBufferSize > 0) {
+                                            reprapWaitForPos = true;
+                                            machineSend('M114\n'); // query position
+                                            reprapBufferSize--;
+                                            writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                        }
                                     }
                                 }, 250);
                             } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
@@ -1087,7 +1546,10 @@ io.sockets.on('connection', function (appSocket) {
                                     if (jsObject.sr.posz) {
                                         zPos = parseFloat(jsObject.sr.posz).toFixed(4);
                                     }
-                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos);
+                                    if (jsObject.sr.posa) {
+                                        aPos = parseFloat(jsObject.sr.posa).toFixed(4);
+                                    }
+                                    io.sockets.emit('wPos', xPos + ',' + yPos + ',' + zPos + ',' + aPos);
                                 }
                                 if (jsObject.hasOwnProperty('gc')) {
                                     writeLog('gcodeReceived ' + jsObject.gc, 3);
@@ -1122,6 +1584,21 @@ io.sockets.on('connection', function (appSocket) {
                                 case 'tinyg':
                                     io.sockets.emit('data', data);
                                     break;
+                                case 'repetier':
+                                    io.sockets.emit('data', data);
+                                    break;
+                                case 'marlinkimbra':
+                                    io.sockets.emit('data', data);
+                                    break;
+                                }
+                            } else if (data.indexOf('wait') === 0) { // Got wait from Repetier -> ignore
+                                // do nothing
+                            } else if (data.indexOf('Resend') === 0) { // Got resend from Repetier -> TODO: resend corresponding line!!!
+                                switch (firmware) {
+                                case 'repetier':
+                                    break;
+                                case 'marlinkimbra':
+                                    break;
                                 }
                             } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
                                 switch (firmware) {
@@ -1135,6 +1612,12 @@ io.sockets.on('connection', function (appSocket) {
                                     io.sockets.emit('data', data);
                                     break;
                                 case 'tinyg':
+                                    io.sockets.emit('data', data);
+                                    break;
+                                case 'repetier':
+                                    io.sockets.emit('data', data);
+                                    break;
+                                case 'marlinkimbra':
                                     io.sockets.emit('data', data);
                                     break;
                                 }
@@ -1191,6 +1674,8 @@ io.sockets.on('connection', function (appSocket) {
                                 tosend = tosend.replace(/\s+/g, '');
                             } else if (tosend.indexOf('Z') === 0) {
                                 tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('A') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
                             }
                             if (newMode) {
                                 if (newMode === lastMode) {
@@ -1234,6 +1719,11 @@ io.sockets.on('connection', function (appSocket) {
             io.sockets.emit('connectStatus', 'Connect');
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
+    });
+
+    appSocket.on('currentQueue', function (data) {
+        writeLog(chalk.red('Sending GCODE queue to Frontend'));
+        io.sockets.emit('gcodeQueue', gcodeQueue);
     });
 
     appSocket.on('runCommand', function (data) {
@@ -1307,12 +1797,68 @@ io.sockets.on('connection', function (appSocket) {
                     addQ('G90');
                     send1Q();
                     break;
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G91');
+                    addQ('G0' + feed + dir + dist);
+                    addQ('G90');
+                    send1Q();
+                    break;
                 default:
                     writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
                     break;
                 }
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid job params!'), 1);
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);
+            }
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
+    appSocket.on('jogTo', function (data) {     // data = {x:xVal, y:yVal, z:zVal, mode:0(absulute)|1(relative), feed:fVal}
+        writeLog(chalk.red('JogTo ' + JSON.stringify(data)), 1);
+        if (isConnected) {
+            if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
+                var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) : '');
+                var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) : '');
+                var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) : '');
+                var mode = ((data.mode == 0) ? 0 : 1);
+                var feed = (data.feed !== undefined ? 'F' + parseInt(data.feed) : '');
+                writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
+                switch (firmware) {
+                case 'grbl':
+                    addQ('$J=G9' + mode + xVal + yVal + zVal + feed);
+                    send1Q();
+                    break;
+                case 'smoothie':
+                    addQ('G9' + mode);
+                    addQ('G0' + feed + xVal + yVal + zVal);
+                    addQ('G90');
+                    send1Q();
+                    break;
+                case 'tinyg':
+                    addQ('G9' + mode);
+                    addQ('G0' + feed + xVal + yVal + zVal);
+                    addQ('G90');
+                    send1Q();
+                    break;
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G9' + mode);
+                    addQ('G0' + feed + xVal + yVal + zVal);
+                    addQ('G90');
+                    send1Q();
+                    break;
+                default:
+                    writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
+                    break;
+                }
+            } else {
+                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);
+                io.sockets.emit('data', 'Invalid jogTo() params!');
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1326,16 +1872,32 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             switch (data) {
             case 'x':
-                addQ('G10 L20 P0﻿ X0');
+                addQ('G10 L20 P0 X0');
                 break;
             case 'y':
-                addQ('G10 L20 P0﻿ Y0');
+                addQ('G10 L20 P0 Y0');
                 break;
             case 'z':
-                addQ('G10 L20 P0﻿ Z0');
+                addQ('G10 L20 P0 Z0');
+                break;
+            case 'a':
+                addQ('G10 L20 P0 A0');
                 break;
             case 'all':
-                addQ('G10 L20 P0﻿ X0 Y0 Z0');
+                switch (firmware) {
+                case 'repetier':
+                    addQ('G92');
+                    break;
+                case 'marlinkimbra':
+                    addQ('G92 X0 Y0 Z0');
+                    break;
+                default:
+                    addQ('G10 L20 P0 X0 Y0 Z0');
+                    break;
+                }
+                break;
+            case 'xyza':
+                addQ('G10 L20 P0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -1359,8 +1921,14 @@ io.sockets.on('connection', function (appSocket) {
             case 'z':
                 addQ('G0 Z0');
                 break;
+            case 'a':
+                addQ('G0 A0');
+                break;
             case 'all':
                 addQ('G0 X0 Y0 Z0');
+                break;
+            case 'xyza':
+                addQ('G0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -1421,6 +1989,22 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'tinyg':
                 break;
+            case 'repetier':
+            case 'marlinkimbra':
+                if (data === 0) {
+                    feedOverride = 100;
+                } else {
+                    if ((feedOverride + data <= 200) && (feedOverride + data >= 10)) {
+                        // valid range is 10..200, else ignore!
+                        feedOverride += data;
+                    }
+                }
+                machineSend('M220 S' + feedOverride + '\n');
+                reprapBufferSize--;
+                writeLog('Sent: M220 S' + feedOverride, 2);
+                io.sockets.emit('feedOverride', feedOverride);
+                writeLog(chalk.red('Feed Override ' + feedOverride.toString() + '%'), 1);
+                break;
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1478,6 +2062,22 @@ io.sockets.on('connection', function (appSocket) {
                 //send1Q();
                 break;
             case 'tinyg':
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                if (data === 0) {
+                    spindleOverride = 100;
+                } else {
+                    if ((spindleOverride + data <= 200) && (spindleOverride + data >= 0)) {
+                        // valid range is 0..200, else ignore!
+                        spindleOverride += data;
+                    }
+                }
+                machineSend('M221 S' + spindleOverride + '\n');
+                reprapBufferSize--;
+                writeLog('Sent: M221 S' + spindleOverride, 2);
+                io.sockets.emit('spindleOverride', spindleOverride);
+                writeLog(chalk.red('Spindle (Laser) Override ' + spindleOverride.toString() + '%'), 1);
                 break;
             }
         } else {
@@ -1548,6 +2148,24 @@ io.sockets.on('connection', function (appSocket) {
                             }
                             send1Q();
                             break;
+                        case 'repetier':
+                        case 'marlinkimbra':
+                            addQ('G1F1');
+                            addQ('M3 S' + parseInt(power * maxS / 100));
+                            addQ('M4');
+                            laserTestOn = true;
+                            appSocket.emit('laserTest', power);
+                            if (duration > 0) {
+                                addQ('G4 P' + duration / 1000);
+                                addQ('M5');
+                                laserTestOn = false;
+                                setTimeout(function () {
+                                    laserTestOn = false;
+                                    appSocket.emit('laserTest', 0);
+                                }, duration );
+                            }
+                            send1Q();
+                            break;
                         }
                     }
                 } else {
@@ -1564,6 +2182,11 @@ io.sockets.on('connection', function (appSocket) {
                         break;
                     case 'tinyg':
                         addQ('M5S0');
+                        send1Q();
+                        break;
+                    case 'repetier':
+                    case 'marlinkimbra':
+                        addQ('M5');
                         send1Q();
                         break;
                     }
@@ -1600,6 +2223,10 @@ io.sockets.on('connection', function (appSocket) {
                 machineSend('!'); // Send hold command
                 writeLog('Sent: !', 2);
                 break;
+            case 'repetier':
+            case 'marlinkimbra':
+                // just stop sending gcodes
+                break;
             }
             io.sockets.emit('runStatus', 'paused');
         } else {
@@ -1626,6 +2253,9 @@ io.sockets.on('connection', function (appSocket) {
             case 'tinyg':
                 machineSend('~'); // Send resume command
                 writeLog('Sent: ~', 2);
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
                 break;
             }
             paused = false;
@@ -1664,7 +2294,6 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Cleaning Queue', 1);
                 gcodeQueue.length = 0; // Dump the Queye
                 grblBufferSize.length = 0; // Dump bufferSizes
-                tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
                 queueLen = 0;
                 queuePointer = 0;
                 queuePos = 0;
@@ -1680,9 +2309,17 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Sent: Code(0x18)', 2);
                 break;
             case 'tinyg':
+                paused = true;
                 machineSend('!'); // hold
                 writeLog('Sent: !', 2);
-//                    machineSend('%'); // dump TinyG queue
+                machineSend('%'); // dump TinyG queue
+                writeLog('Sent: %', 2);
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                paused = true;
+                machineSend('M112/n'); // hold
+                writeLog('Sent: M112', 2);
                 break;
             }
             clearInterval(queueCounter);
@@ -1690,6 +2327,8 @@ io.sockets.on('connection', function (appSocket) {
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
             tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+            reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+            reprapWaitForPos = false;
             queueLen = 0;
             queuePointer = 0;
             queuePos = 0;
@@ -1723,8 +2362,13 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog('Sent: $X', 2);
                     break;
                 case 'tinyg':
-                    machineSend('$X\n'); // resume
+                    machineSend('$X\n');
                     writeLog('Sent: $X', 2);
+                    break;
+                case 'repetier':
+                case 'marlinkimbra':
+                    machineSend('M112\n');
+                    writeLog('Sent: M112', 2);
                     break;
                 }
                 writeLog('Resuming Queue Lockout', 1);
@@ -1734,6 +2378,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // Dump the Queye
                 grblBufferSize.length = 0; // Dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                reprapWaitForPos = false;
                 queueLen = 0;
                 queuePointer = 0;
                 queuePos = 0;
@@ -1755,8 +2401,15 @@ io.sockets.on('connection', function (appSocket) {
                 case 'tinyg':
                     machineSend('%'); // flush tinyg quere
                     writeLog('Sent: %', 2);
-                    machineSend('~'); // resume
-                    writeLog('Sent: ~', 2);
+                    //machineSend('~'); // resume
+                    //writeLog('Sent: ~', 2);
+                    blocked = false;
+                    paused = false;
+                    break;
+                case 'repetier':
+                case 'marlinkimbra':
+                    machineSend('M112/b');
+                    writeLog('Sent: M112', 2);
                     blocked = false;
                     paused = false;
                     break;
@@ -1787,6 +2440,11 @@ io.sockets.on('connection', function (appSocket) {
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
                 writeLog('Sent: Code(0x18)', 2);
                 break;
+            case 'repetier':
+            case 'marlinkimbra':
+                machineSend('M112/n');
+                writeLog('Sent: M112', 2);
+                break;
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1805,6 +2463,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // dump the queye
                 grblBufferSize.length = 0; // dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                reprapWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
                 port.close();
@@ -1816,6 +2476,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // dump the queye
                 grblBufferSize.length = 0; // dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                reprapWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
                 machineSocket.destroy();
@@ -1827,6 +2489,8 @@ io.sockets.on('connection', function (appSocket) {
                 gcodeQueue.length = 0; // dump the queye
                 grblBufferSize.length = 0; // dump bufferSizes
                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                reprapWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
                 machineSocket.close();
@@ -1839,8 +2503,10 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('disconnect', function () { // Deliver Firmware to Web-Client
-        writeLog(chalk.yellow('App disconnectd!'), 1);
+    appSocket.on('disconnect', function () { // App disconnected
+        let id = connections.indexOf(appSocket);
+        writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
+        connections.splice(id, 1);
     });
 
 }); // End appSocket
@@ -1967,6 +2633,15 @@ function send1Q() {
                 writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
             }
             break;
+        case 'repetier':
+        case 'marlinkimbra':
+            while (reprapBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
+                gcode = gcodeQueue.shift();
+                machineSend(gcode + '\n');
+                reprapBufferSize--;
+                writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+            }
+            break;
         }
         var finishTime, elapsedTimeMS, elapsedTime, speed;
         if (startTime && (queuePointer - queuePos) >= 500) {
@@ -1993,6 +2668,7 @@ function send1Q() {
             gcodeQueue.length = 0; // Dump the Queye
             grblBufferSize.length = 0; // Dump bufferSizes
             tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+            reprapBufferSize = REPRAP_RX_BUFFER_SIZE;  // reset tinygBufferSize
             queueLen = 0;
             queuePointer = 0;
             queuePos = 0;
@@ -2031,34 +2707,6 @@ function writeLog(line, verb) {
     }
 }
 
-function polarTransform(x, y) {
-    var a = Math.sqrt(Math.pow(X+x, 2) + Math.pow(Y-y, 2)) - A;
-    var b = Math.sqrt(Math.pow(W-X-x, 2) + Math.pow(Y-y, 2)) - B;
-    return {x:a.toFixed(config.posDecimals), y:b.toFixed(config.posDecimals)};
-}
-
-function cartesianTransform(a, b) {
-	var rad = 180 / Math.PI;
-	writeLog('Params: ' + a + ', ' + b + ', ' + A + ', ' + B + ', ' + X + ', ' + Y + ', ' + W, 1);
-	var Bb = parseFloat(B) - parseFloat(b);
-	//writeLog('Bb=' + Bb, 1);
-	var Bb2 = Math.pow(Bb, 2);
-	//writeLog('Bb2=' + Bb2, 1);
-	var W2 = Math.pow(W, 2);
-	//writeLog('W2=' + W2, 1);
-	var aA = parseFloat(a) + parseFloat(A);
-	//writeLog('aA=' + aA, 1);
-	var aA2 = Math.pow(aA, 2);
-	//writeLog('aA2=' + aA2, 1);
-	var cosA = (aA2 + W2 - Bb2) / ( 2 * aA * W);
-	writeLog('cosAlpha=' + cosA, 1);
-	writeLog('Alpha=' + Math.acos(cosA) * rad, 1);
-    var x = cosA * aA - X;
-    var y = Y - Math.sin(Math.acos(cosA)) * aA;
-	writeLog('x=' + x.toFixed(config.posDecimals) + ', y=' + y.toFixed(config.posDecimals), 1);
-    return {x:x.toFixed(config.posDecimals), y:y.toFixed(config.posDecimals)};
-}
-
 
 
 // Electron app
@@ -2091,7 +2739,7 @@ if (electronApp) {
         mainWindow = new BrowserWindow({width: 1200, height: 900, fullscreen: false, center: true, resizable: true, title: "LaserWeb", frame: true, autoHideMenuBar: true, icon: '/public/favicon.png' });
 
         // and load the index.html of the app.
-        mainWindow.loadURL('http://127.0.0.1:8000');
+        mainWindow.loadURL('http://127.0.0.1:' + config.webPort);
 
         // Emitted when the window is closed.
         mainWindow.on('closed', function () {
@@ -2104,7 +2752,7 @@ if (electronApp) {
           mainWindow.show()
         })
         mainWindow.maximize()
-        //mainWindow.webContents.openDevTools() // Enable when testing 
+        //mainWindow.webContents.openDevTools() // Enable when testing
     };
 
     electronApp.commandLine.appendSwitch("--ignore-gpu-blacklist");
