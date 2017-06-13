@@ -721,9 +721,10 @@ io.sockets.on('connection', function (appSocket) {
                     } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                         switch (firmware) {
                         case 'grbl':
-                            var alarmCode = data.split(':')[1];
-                            writeLog('ALARM:' + grblStrings.alarms(alarmCode));
-                            io.sockets.emit('data', 'ALARM:' + grblStrings.alarms(alarmCode));
+                            grblBufferSize.shift();
+                            var alarmCode = parseInt(data.split(':')[1]);
+                            writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                            io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
                             break;
                         case 'smoothie':
                             io.sockets.emit('data', data);
@@ -751,9 +752,9 @@ io.sockets.on('connection', function (appSocket) {
                         switch (firmware) {
                         case 'grbl':
                             grblBufferSize.shift();
-                            var errorCode = data.split(':')[1];
-                            writeLog('error:' + grblStrings.errors(errorCode));
-                            io.sockets.emit('data', 'error:' + grblStrings.errors(errorCode));
+                            var errorCode = parseInt(data.split(':')[1]);
+                            writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                            io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
                             break;
                         case 'smoothie':
                             io.sockets.emit('data', data);
@@ -1127,9 +1128,9 @@ io.sockets.on('connection', function (appSocket) {
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                             switch (firmware) {
                             case 'grbl':
-                                var alarmCode = data.split(':')[1];
-                                writeLog('ALARM:' + grblStrings.alarms(alarmCode));
-                                io.sockets.emit('data', 'ALARM:' + grblStrings.alarms(alarmCode));
+                                var alarmCode = parseInt(data.split(':')[1]);
+                                writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                                io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
                                 break;
                             case 'smoothie':
                                 io.sockets.emit('data', data);
@@ -1157,9 +1158,9 @@ io.sockets.on('connection', function (appSocket) {
                             switch (firmware) {
                             case 'grbl':
                                 grblBufferSize.shift();
-                                var errorCode = data.split(':')[1];
-                                writeLog('error:' + grblStrings.errors(errorCode));
-                                io.sockets.emit('data', 'error:' + grblStrings.errors(errorCode));
+                                var errorCode = parseInt(data.split(':')[1]);
+                                writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                                io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
                                 break;
                             case 'smoothie':
                                 io.sockets.emit('data', data);
@@ -1574,9 +1575,9 @@ io.sockets.on('connection', function (appSocket) {
                             } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
                                 switch (firmware) {
                                 case 'grbl':
-                                    var alarmCode = data.split(':')[1];
-                                    writeLog('ALARM:' + grblStrings.alarms(alarmCode));
-                                    io.sockets.emit('data', 'ALARM:' + grblStrings.alarms(alarmCode));
+                                    var alarmCode = parseInt(data.split(':')[1]);
+                                    writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                                    io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
                                     break;
                                 case 'smoothie':
                                     io.sockets.emit('data', data);
@@ -1604,9 +1605,9 @@ io.sockets.on('connection', function (appSocket) {
                                 switch (firmware) {
                                 case 'grbl':
                                     grblBufferSize.shift();
-                                    var errorCode = data.split(':')[1];
-                                    writeLog('error:' + grblStrings.errors(errorCode));
-                                    io.sockets.emit('data', 'error:' + grblStrings.errors(errorCode));
+                                    var errorCode = parseInt(data.split(':')[1]);
+                                    writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                                    io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
                                     break;
                                 case 'smoothie':
                                     io.sockets.emit('data', data);
@@ -1939,6 +1940,137 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
+    appSocket.on('home', function (data) {
+        writeLog(chalk.red('home(' + data + ')'), 1);
+        if (isConnected) {
+            switch (data) {
+            case 'x':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 X');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'y':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 Y');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'z':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 Z');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'a':
+                switch (firmware) {
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 E1');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'all': // XYZ only!!
+                switch (firmware) {
+                case 'grbl':
+                    addQ('$H');
+                    break;
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 X Y Z');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            case 'xyza':
+                switch (firmware) {
+                case 'grbl':
+                    addQ('$H');
+                    break;
+                case 'smothie':
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('G28.2 X Y Z E');
+                    break;
+                default:
+                    //not supported
+                    appSocket.emit('error', 'Command not supported by firmware!');
+                    break;
+                }
+                break;
+            }
+            send1Q();
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
+    appSocket.on('probe', function (data) {
+        writeLog(chalk.red('probe(' + JSON.stringify(data) + ')'), 1);
+        if (isConnected) {
+            switch (firmware) {
+            case 'smothie':
+                switch (data.direction) {
+                case 'z':
+                    addQ('G30 Z' + data.probeOffset);
+                    break;
+                default:
+                    addQ('G38.2 ' + data.direction);
+                    break;
+                }
+            case 'grbl':
+                addQ('G38.2 ' + data.direction + '-5 F1');
+                addQ('G92 ' + data.direction + ' ' + data.probeOffset);
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G38.2 ' + data.direction + '-5 F1');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
+                break;
+            }
+            send1Q();
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+    
     appSocket.on('feedOverride', function (data) {
         if (isConnected) {
             switch (firmware) {

@@ -2,12 +2,12 @@
   "name": "lw.comm-server",
   "version": "4.0.96",
   "description": "Unified communications server for LaserWeb/CNCweb",
-  "author": "Claudio Prezzi",
+  "author": "github.com/LaserWeb",		
   "contributors": [
-    "Peter van der Walt <peter.plaaswerf@gmail.com>",
-    "Sébastien Mischler <sebastien@onlfait.ch>",
-    "Todd Fleming <jscut.org>",
-    "Jorge Robles <jorge.diego.robles@gmail.com>",
+    "Peter van der Walt <peter.plaaswerf@gmail.com>",		
+    "Sébastien Mischler <sebastien@onlfait.ch>",		
+    "Todd Fleming <jscut.org>",		
+    "Jorge Robles <jorge.diego.robles@gmail.com>",  
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
   ],
   "license": "AGPL-3.0",
@@ -20,6 +20,13 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
+  },
+  "devDependencies": {		
+    "copyfiles": "^1.2.0",		
+    "electron": "^1.6.1",		
+    "electron-builder": "^14.1.1",		
+    "electron-rebuild": "^1.5.7",		
+    "ncp": "^2.0.0"		
   },
   "dependencies": {
     "chalk": "*",
@@ -37,16 +44,18 @@
   "homepage": "https://github.com/LaserWeb/lw.comm-server#readme",
   "main": "server.js",
   "scripts": {
-    "dist": "npm run copy && build",
-    "distmac": "npm run copy && build --mac ",
-    "distwinx86": "npm run copy && build --win --ia32 ",
-    "distwinx64": "npm run copy && build --win --x64",
-    "distlinx86": "npm run copy && build --linux --ia32 ",
-    "distlinx64": "npm run copy && build --linux --x64",
-    "copy": "ncp ../LaserWeb4/dist/ app/ --limit=6",
-    "start": "node server.js",
+    "start": "echo \"Please run 'npm run dist' to create a local installer, or run 'npm run nightlylinux' or 'npm run nightlywindows' to build distributable installers for each platform\" ",
+    "test": "echo \"Error: no test specified\" && exit 0",
     "update_lw4": "git rm app/ -r -f && cp ../LaserWeb4/dist/. app/ -r -u && git add app/",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dist": "npm run copy && build",
+    "distmac": "npm run copy && build --mac ",		
+    "distwinx86": "npm run copy && build --win --ia32 ",		
+    "distwinx64": "npm run copy && build --win --x64",		
+    "distlinx86": "npm run copy && build --linux --ia32 ",		
+    "distlinx64": "npm run copy && build --linux --x64",		
+    "copy": "ncp ../LaserWeb4/dist/ app/ --limit=6",		
+    "nightlywindows": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distwinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win64/ && cd .. && npm run distwinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win32/ && cd ../../LaserWeb4-Binaries",	
+    "nightlylinux": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distlinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux64/ && cd .. && npm run distlinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux32/ && cd ../../LaserWeb4-Binaries"
   },
   "keywords": [
     "laserweb",
@@ -59,5 +68,33 @@
     "ethernet",
     "gateway",
     "ESP8266"
-  ]
+  ],
+  "build": {		
+    "appId": "xyz.laserweb",		
+    "productName": "LaserWeb",		
+    "asar": true,		
+    "files": [		
+      "**/*"		
+    ],		
+    "mac": {		
+      "icon": "build/icon.icns",		
+      "category": "public.app-category.graphics-design"		
+    },		
+    "dmg": {		
+      "icon": "build/icon.icns",		
+      "contents": [		
+        {		
+          "x": 410,		
+          "y": 150,		
+          "type": "link",		
+          "path": "/Applications"		
+        },		
+        {		
+          "x": 130,		
+          "y": 150,		
+          "type": "file"		
+        }		
+      ]		
+    }		
+  }
 }
