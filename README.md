@@ -15,7 +15,7 @@ The server supports several interfaces to communicate with machines.
 ### Implemented:
 * Serial over **USB**
 * Websocket to **ESP8266** (as WLAN to serial gateway)
-* **Telnet** over Network (for Smoothieware olny)
+* **Telnet** over Network (for Smoothieware only)
 
 ## Supported firmwares
 * Grbl (ATmega328)
