@@ -70,4 +70,7 @@ npm run dist
 #!bin/bash
 cd LaserWeb4 && git reset --hard && git pull && npm run installdev && npm run bundle-dev && cd ..
 cd lw.comm-server  && git reset --hard && git pull && npm install && ./node_modules/.bin/electron-rebuild
+#if you need
+#npm run dist
+
 ```
