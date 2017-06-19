@@ -307,11 +307,11 @@ io.sockets.on('connection', function (appSocket) {
                                             reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
-                                    }, 1000);
+                                    }, config.tinygWaitTime * 1000);
                                 }
-                            }, 500);
+                            }, config.smoothieWaitTime * 1000);
                         }
-                    }, 500);
+                    }, config.grblWaitTime * 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
                             // Close port if we don't detect supported firmware after 2s.
