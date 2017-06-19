@@ -10,7 +10,6 @@
     "Jorge Robles <jorge.diego.robles@gmail.com>",  
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
   ],
-  "license": "AGPL-3.0",
   "licenses": [
     {
       "type": "AGPL-3.0",
@@ -23,7 +22,7 @@
   },
   "devDependencies": {		
     "copyfiles": "^1.2.0",		
-    "electron": "^1.6.1",		
+    "electron": "^1.6.x",		
     "electron-builder": "^14.1.1",		
     "electron-rebuild": "^1.5.7",		
     "ncp": "^2.0.0"		
@@ -37,7 +36,6 @@
     "socket.io": "1.7.x",
     "ws": "^1.1.1"
   },
-  "devDependencies": {},
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
   },
