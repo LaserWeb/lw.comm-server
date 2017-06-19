@@ -12,5 +12,11 @@ config.resetOnConnect = process.env.RESET_ON_CONNECT || 0;
 
 config.posDecimals = process.env.DRO_DECIMALS || 2;
 config.firmwareWaitTime = process.env.FIRMWARE_WAIT_TIME || 10;
+config.grblWaitTime = process.env.GRBL_WAIT_TIME || 0.5;
+config.smoothieWaitTime = process.env.SMOOTHIE_WAIT_TIME || 0.5;
+config.tinygWaitTime = process.env.TINYG_WAIT_TIME || 1;
+config.marlinkimbraWaitTime = process.env.MARLINKIMBRA_WAIT_TIME || 5;
+config.repetierWaitTime = process.env.REPETIER_WAIT_TIME || 10;
+config.lasaurGrblWaitTime = process.env.LASAURGRBL_WAIT_TIME || 5;
 
 module.exports = config;

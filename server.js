@@ -86,6 +86,8 @@ var REPRAP_RX_BUFFER_SIZE = 2;                  // max. lines of gcode to send b
 var reprapBufferSize = REPRAP_RX_BUFFER_SIZE;   // init space left
 var reprapWaitForPos = false;
 
+var LASAUR_RX_BUFFER_SIZE = 256;
+
 var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 
@@ -307,11 +309,11 @@ io.sockets.on('connection', function (appSocket) {
                                             reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
-                                    }, 1000);
+                                    }, config.tinygWaitTime * 1000);
                                 }
-                            }, 500);
+                            }, config.smoothieWaitTime * 1000);
                         }
-                    }, 500);
+                    }, config.grblWaitTime * 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
                             // Close port if we don't detect supported firmware after 2s.
@@ -364,404 +366,441 @@ io.sockets.on('connection', function (appSocket) {
 
                 port.on('data', function (data) {
                     writeLog('Recv: ' + data, 3);
-                    if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
-                        if (firmware === 'grbl') {
-                            grblBufferSize.shift();
+                    switch (firmware) {
+                    case 'lasaurgrbl':
+                        var startPos;
+                        startPos = data.search(/x/i) + 1;
+                        if (startPos) {
+                            xPos = parseFloat(data.substr(startPos, 5)).toFixed(config.posDecimals);
                         }
-                        if (firmware === 'repetier' || firmware === 'marlinkimbra') {
-                            reprapBufferSize++;
+                        startPos = data.search(/y/i) + 1;
+                        if (startPos) {
+                            yPos = parseFloat(data.substr(startPos, 5)).toFixed(config.posDecimals);
                         }
-                        blocked = false;
-                        send1Q();
-                    } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
-                        var state = data.substring(1, data.search(/(,|\|)/));
-                        //appSocket.emit('runStatus', state);
-                        io.sockets.emit('data', data);
-                        // Extract wPos
-                        var startWPos = data.search(/wpos:/i) + 5;
-                        var wPos;
-                        if (startWPos > 5) {
-                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
+                        startPos = data.search(/z/i) + 1;
+                        if (startPos) {
+                            zPos = parseFloat(data.substr(startPos, 5)).toFixed(config.posDecimals);
                         }
-                        if (Array.isArray(wPos)) {
-                            var send = true;
-                            if (xPos !== parseFloat(wPos[0]).toFixed(config.posDecimals)) {
-                                xPos = parseFloat(wPos[0]).toFixed(config.posDecimals);
-                                send = true;
+                        writeLog('Position: ' + xPos + '/' + yPos + '/' + zPos, 3);
+                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                        grblBufferSize.shift();
+                        break;
+                    default:        
+                        if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
+                            if (firmware === 'grbl') {
+                                grblBufferSize.shift();
                             }
-                            if (yPos !== parseFloat(wPos[1]).toFixed(config.posDecimals)) {
-                                yPos = parseFloat(wPos[1]).toFixed(config.posDecimals);
-                                send = true;
+                            if (firmware === 'repetier' || firmware === 'marlinkimbra') {
+                                reprapBufferSize++;
                             }
-                            if (zPos !== parseFloat(wPos[2]).toFixed(config.posDecimals)) {
-                                zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
-                                aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (send) {
-                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
-                            }
-                        }
-                        // Extract mPos (for smoothieware only!)
-                        var startMPos = data.search(/mpos:/i) + 5;
-                        var mPos;
-                        if (startMPos > 5) {
-                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
-                        }
-                        if (Array.isArray(mPos)) {
-                            var send = false;
-                            if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
-                                xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
-                                yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
-                                zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
-                                aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (send) {
-                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
-                            }
-                        }
-                        // Extract work offset (for Grbl > 1.1 only!)
-                        var startWCO = data.search(/wco:/i) + 4;
-                        var wco;
-                        if (startWCO > 4) {
-                            wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
-                        }
-                        if (Array.isArray(wco)) {
-                            xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
-                            yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
-                            zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
-                            aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
-                            if (send) {
-                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
-                            }
-                        }
-                        // Extract override values (for Grbl > v1.1 only!)
-                        var startOv = data.search(/ov:/i) + 3;
-                        if (startOv > 3) {
-                            var ov = data.replace('>', '').substr(startOv).split(/,|\|/, 3);
-                            if (Array.isArray(ov)) {
-                                if (ov[0]) {
-                                    io.sockets.emit('feedOverride', ov[0]);
-                                }
-                                if (ov[1]) {
-                                    io.sockets.emit('rapidOverride', ov[1]);
-                                }
-                                if (ov[2]) {
-                                    io.sockets.emit('spindleOverride', ov[2]);
-                                }
-                            }
-                        }
-                        // Extract realtime Feed and Spindle (for Grbl > v1.1 only!)
-                        var startFS = data.search(/FS:/i) + 3;
-                        if (startFS > 3) {
-                            var fs = data.replace('>', '').substr(startFS).split(/,|\|/, 2);
-                            if (Array.isArray(fs)) {
-                                if (fs[0]) {
-                                    io.sockets.emit('realFeed', fs[0]);
-                                }
-                                if (fs[1]) {
-                                    io.sockets.emit('realSpindle', fs[1]);
-                                }
-                            }
-                        }
-                    } else if (data.indexOf('X') === 0) {   // Extract wPos for Repetier
-                        var pos;
-                        var startPos = data.search(/x:/i) + 2;
-                        if (startPos >= 2) {
-                            pos = data.substr(startPos, 4);
-                            if (xPos !== parseFloat(pos).toFixed(config.posDecimals)) {
-                                xPos = parseFloat(pos).toFixed(config.posDecimals);
-                            }
-                        }
-                        var startPos = data.search(/y:/i) + 2;
-                        if (startPos >= 2) {
-                            pos = data.substr(startPos, 4);
-                            if (yPos !== parseFloat(pos).toFixed(config.posDecimals)) {
-                                yPos = parseFloat(pos).toFixed(config.posDecimals);
-                            }
-                        }
-                        var startPos = data.search(/z:/i) + 2;
-                        if (startPos >= 2) {
-                            pos = data.substr(startPos, 4);
-                            if (zPos !== parseFloat(pos).toFixed(config.posDecimals)) {
-                                zPos = parseFloat(pos).toFixed(config.posDecimals);
-                            }
-                        }
-                        var startPos = data.search(/e:/i) + 2;
-                        if (startPos >= 2) {
-                            pos = data.substr(startPos, 4);
-                            if (aPos !== parseFloat(pos).toFixed(config.posDecimals)) {
-                                aPos = parseFloat(pos).toFixed(config.posDecimals);
-                            }
-                        }
-                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
-                        //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
-                        reprapWaitForPos = false;
-                    } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
-                        firmware = 'grbl';
-                        fVersion = data.substr(5, 4); // get version
-                        fDate = '';
-                        writeLog('GRBL detected (' + fVersion + ')', 1);
-                        io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
-                        // Start intervall for status queries
-                        statusLoop = setInterval(function () {
-                            if (isConnected) {
-                                machineSend('?');
-                                //writeLog('Sent: ?', 2);
-                            }
-                        }, 250);
-                    } else if (data.indexOf('LPC176') >= 0) { // LPC1768 or LPC1769 should be Smoothie
-                        firmware = 'smoothie';
-                        //SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
-                        var startPos = data.search(/version:/i) + 9;
-                        fVersion = data.substr(startPos).split(/,/, 1);
-                        startPos = data.search(/Build date:/i) + 12;
-                        fDate = new Date(data.substr(startPos).split(/,/, 1));
-                        var dateString = fDate.toDateString();
-                        writeLog('Smoothieware detected (' + fVersion + ', ' + dateString + ')', 1);
-                        io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
-                        // Start intervall for status queries
-                        statusLoop = setInterval(function () {
-                            if (isConnected) {
-                                machineSend('?');
-                                //writeLog('Sent: ?', 2);
-                            }
-                        }, 250);
-                    } else if (data.indexOf('start') === 0) { // Check if it's RepRap
-                        machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
-                        reprapBufferSize--;
-                        writeLog('Sent: M115', 2);
-                    } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
-                        firmware = 'repetier';
-                        var startPos = data.search(/repetier_/i) + 9;
-                        fVersion = data.substr(startPos, 4); // get version
-                        fDate = '';
-                        writeLog('Repetier detected (' + fVersion + ')', 1);
-                        io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
-                        // Start intervall for status queries
-                        statusLoop = setInterval(function () {
-                            if (isConnected) {
-                                if (!reprapWaitForPos && reprapBufferSize > 0) {
-                                    reprapWaitForPos = true;
-                                    machineSend('M114\n'); // query position
-                                    reprapBufferSize--;
-                                    writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
-                                }
-                            }
-                        }, 250);
-                    } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
-                        firmware = 'marlinkimbra';
-                        var startPos = data.search(/mk_/i) + 3;
-                        fVersion = data.substr(startPos, 5); // get version
-                        fDate = '';
-                        writeLog('MarlinKimbra detected (' + fVersion + ')', 1);
-                        io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
-                        // Start intervall for status queries
-                        statusLoop = setInterval(function () {
-                            if (isConnected) {
-                                if (!reprapWaitForPos && reprapBufferSize >= 0) {
-                                    reprapWaitForPos = true;
-                                    machineSend('M114\n'); // query position
-                                    reprapBufferSize--;
-                                    writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
-                                }
-                            }
-                        }, 250);
-                    } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
-                        var jsObject = JSON.parse(data);
-                        if (jsObject.hasOwnProperty('r')) {
-                            var footer = jsObject.f || (jsObject.r && jsObject.r.f);
-                            var responseText;
-                            if (footer !== undefined) {
-                                if (footer[1] === 108) {
-                                    responseText = util.format("TinyG reported an syntax error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
-                                    io.sockets.emit('data', responseText);
-                                    writeLog("Response: " + responseText + jsObject, 3);
-                                } else if (footer[1] === 20) {
-                                    responseText = util.format("TinyG reported an internal error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
-                                    io.sockets.emit('data', responseText);
-                                    writeLog("Response: " + responseText + jsObject, 3);
-                                } else if (footer[1] === 202) {
-                                    responseText = util.format("TinyG reported an TOO SHORT MOVE on line %d", jsObject.r.n);
-                                    io.sockets.emit('data', responseText);
-                                    writeLog("Response: " + responseText + jsObject, 3);
-                                } else if (footer[1] === 204) {
-                                    responseText = util.format("TinyG reported COMMAND REJECTED BY ALARM '%s'", JSON.stringify(jsObject.r));
-                                    io.sockets.emit('data', responseText);
-                                    writeLog("InAlarm: " + responseText + jsObject, 3);
-                                } else if (footer[1] !== 0) {
-                                    responseText = util.format("TinyG reported an error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
-                                    io.sockets.emit('data', responseText);
-                                    writeLog("Response: " + responseText + jsObject, 3);
-                                } else {
-                                    //io.sockets.emit('data', data);
-                                }
-                            }
-                            //writeLog('Response: ' + JSON.stringify(jsObject.r) + ', ' + footer, 3);
-                            jsObject = jsObject.r;
-
-                            tinygBufferSize++;
                             blocked = false;
                             send1Q();
-                        }
-                        if (jsObject.hasOwnProperty('sr')) {    // status report
-                            //writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
-                            var send = false;
-                            if (jsObject.sr.posx != null) {
-                                xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
-                                send = true;
+                        } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
+                            var state = data.substring(1, data.search(/(,|\|)/));
+                            //appSocket.emit('runStatus', state);
+                            io.sockets.emit('data', data);
+                            // Extract wPos
+                            var startWPos = data.search(/wpos:/i) + 5;
+                            var wPos;
+                            if (startWPos > 5) {
+                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
                             }
-                            if (jsObject.sr.posy != null) {
-                                yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (jsObject.sr.posz != null) {
-                                zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (jsObject.sr.posa != null) {
-                                aPos = parseFloat(jsObject.sr.posa).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (send) {
-                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
-                                //writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos + ', ' + aPos, 3);
-                            }
-                            if (jsObject.sr.stat) {
-                                var status = null;
-                                switch (jsObject.sr.stat) {
-                                    case 0:     // initializing
-                                        status = 'Init';
-                                        break;
-                                    case 1:     // ready
-                                        status = 'Idle';
-                                        break;
-                                    case 2:     // shutdown
-                                        status = 'Alarm';
-                                        break;
-                                    case 3:     // stop
-                                        status = 'Idle';
-                                        break;
-                                    case 4:     // end
-                                        status = 'Idle';
-                                        break;
-                                    case 5:     // run
-                                        status = 'Run';
-                                        break;
-                                    case 6:     // hold
-                                        status = 'Hold';
-                                        break;
-                                    case 7:     // probe cycle
-                                        status = 'Probe';
-                                        break;
-                                    case 8:     // running / cycling
-                                        status = 'Run';
-                                        break;
-                                    case 9:     // homing
-                                        status = 'Home';
-                                        break;
+                            if (Array.isArray(wPos)) {
+                                var send = true;
+                                if (xPos !== parseFloat(wPos[0]).toFixed(config.posDecimals)) {
+                                    xPos = parseFloat(wPos[0]).toFixed(config.posDecimals);
+                                    send = true;
                                 }
-                                if (status) {
-                                    io.sockets.emit('data', '<' + status + ',>');
-                                    //writeLog('Status: ' + status, 3);
+                                if (yPos !== parseFloat(wPos[1]).toFixed(config.posDecimals)) {
+                                    yPos = parseFloat(wPos[1]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (zPos !== parseFloat(wPos[2]).toFixed(config.posDecimals)) {
+                                    zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                    aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                                 }
                             }
-                        }
-                        if (jsObject.hasOwnProperty('fb')) {    // firmware
-                            firmware = 'tinyg';
-                            fVersion = jsObject.fb;
+                            // Extract mPos (for smoothieware only!)
+                            var startMPos = data.search(/mpos:/i) + 5;
+                            var mPos;
+                            if (startMPos > 5) {
+                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(mPos)) {
+                                var send = false;
+                                if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
+                                    xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
+                                    yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
+                                    zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
+                                    aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                }
+                            }
+                            // Extract work offset (for Grbl > 1.1 only!)
+                            var startWCO = data.search(/wco:/i) + 4;
+                            var wco;
+                            if (startWCO > 4) {
+                                wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(wco)) {
+                                xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                                yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                                zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                                aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                                if (send) {
+                                    io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                }
+                            }
+                            // Extract override values (for Grbl > v1.1 only!)
+                            var startOv = data.search(/ov:/i) + 3;
+                            if (startOv > 3) {
+                                var ov = data.replace('>', '').substr(startOv).split(/,|\|/, 3);
+                                if (Array.isArray(ov)) {
+                                    if (ov[0]) {
+                                        io.sockets.emit('feedOverride', ov[0]);
+                                    }
+                                    if (ov[1]) {
+                                        io.sockets.emit('rapidOverride', ov[1]);
+                                    }
+                                    if (ov[2]) {
+                                        io.sockets.emit('spindleOverride', ov[2]);
+                                    }
+                                }
+                            }
+                            // Extract realtime Feed and Spindle (for Grbl > v1.1 only!)
+                            var startFS = data.search(/FS:/i) + 3;
+                            if (startFS > 3) {
+                                var fs = data.replace('>', '').substr(startFS).split(/,|\|/, 2);
+                                if (Array.isArray(fs)) {
+                                    if (fs[0]) {
+                                        io.sockets.emit('realFeed', fs[0]);
+                                    }
+                                    if (fs[1]) {
+                                        io.sockets.emit('realSpindle', fs[1]);
+                                    }
+                                }
+                            }
+                        } else if (data.indexOf('X') === 0) {   // Extract wPos for Repetier
+                            var pos;
+                            var startPos = data.search(/x:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (xPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    xPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            var startPos = data.search(/y:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (yPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    yPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            var startPos = data.search(/z:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (zPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    zPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            var startPos = data.search(/e:/i) + 2;
+                            if (startPos >= 2) {
+                                pos = data.substr(startPos, 4);
+                                if (aPos !== parseFloat(pos).toFixed(config.posDecimals)) {
+                                    aPos = parseFloat(pos).toFixed(config.posDecimals);
+                                }
+                            }
+                            io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                            //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
+                            reprapWaitForPos = false;
+                        } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
+                            firmware = 'grbl';
+                            fVersion = data.substr(5, 4); // get version
                             fDate = '';
-                            writeLog('TinyG detected (' + fVersion + ')', 1);
+                            writeLog('GRBL detected (' + fVersion + ')', 1);
                             io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
                             // Start intervall for status queries
-//                            statusLoop = setInterval(function () {
-//                                if (isConnected) {
-//                                    machineSend('{sr:n}\n');
-//                                    //writeLog('Sent: {"sr":null}', 2);
-//                                }
-//                            }, 250);
-                        }
-                        if (jsObject.hasOwnProperty('gc')) {
-                            writeLog('gcodeReceived ' + jsObject.r.gc, 3);
+                            statusLoop = setInterval(function () {
+                                if (isConnected) {
+                                    machineSend('?');
+                                    //writeLog('Sent: ?', 2);
+                                }
+                            }, 250);
+                        } else if (data.indexOf('LPC176') >= 0) { // LPC1768 or LPC1769 should be Smoothie
+                            firmware = 'smoothie';
+                            //SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
+                            var startPos = data.search(/version:/i) + 9;
+                            fVersion = data.substr(startPos).split(/,/, 1);
+                            startPos = data.search(/Build date:/i) + 12;
+                            fDate = new Date(data.substr(startPos).split(/,/, 1));
+                            var dateString = fDate.toDateString();
+                            writeLog('Smoothieware detected (' + fVersion + ', ' + dateString + ')', 1);
+                            io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                            // Start intervall for status queries
+                            statusLoop = setInterval(function () {
+                                if (isConnected) {
+                                    machineSend('?');
+                                    //writeLog('Sent: ?', 2);
+                                }
+                            }, 250);
+                        } else if (data.indexOf('start') === 0) { // Check if it's RepRap
+                            machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                            reprapBufferSize--;
+                            writeLog('Sent: M115', 2);
+                        } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
+                            firmware = 'repetier';
+                            var startPos = data.search(/repetier_/i) + 9;
+                            fVersion = data.substr(startPos, 4); // get version
+                            fDate = '';
+                            writeLog('Repetier detected (' + fVersion + ')', 1);
+                            io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                            // Start intervall for status queries
+                            statusLoop = setInterval(function () {
+                                if (isConnected) {
+                                    if (!reprapWaitForPos && reprapBufferSize > 0) {
+                                        reprapWaitForPos = true;
+                                        machineSend('M114\n'); // query position
+                                        reprapBufferSize--;
+                                        writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                    }
+                                }
+                            }, 250);
+                        } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
+                            firmware = 'marlinkimbra';
+                            var startPos = data.search(/mk_/i) + 3;
+                            fVersion = data.substr(startPos, 5); // get version
+                            fDate = '';
+                            writeLog('MarlinKimbra detected (' + fVersion + ')', 1);
+                            io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                            // Start intervall for status queries
+                            statusLoop = setInterval(function () {
+                                if (isConnected) {
+                                    if (!reprapWaitForPos && reprapBufferSize >= 0) {
+                                        reprapWaitForPos = true;
+                                        machineSend('M114\n'); // query position
+                                        reprapBufferSize--;
+                                        writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                    }
+                                }
+                            }, 250);
+                        } else if (data.indexOf('LasaurGrbl') >= 0) { // Check if it's MarlinKimbra
+                            firmware = 'lasaurgrbl';
+                            var startPos = data.search(/Grbl /i) + 5;
+                            fVersion = data.substr(startPos, 6); // get version
+                            fDate = '';
+                            writeLog('LasaurGrbl detected (' + fVersion + ')', 1);
+                            io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                            // Start intervall for status queries
+                            statusLoop = setInterval(function () {
+                                if (isConnected) {
+                                    //machineSend(String.fromCharCode(parseInt(3)) + '\n');
+                                    machineSend('?\n');
+                                    writeLog('Sent: ?', 2);
+                                }
+                            }, 1000);
+                        } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
+                            var jsObject = JSON.parse(data);
+                            if (jsObject.hasOwnProperty('r')) {
+                                var footer = jsObject.f || (jsObject.r && jsObject.r.f);
+                                var responseText;
+                                if (footer !== undefined) {
+                                    if (footer[1] === 108) {
+                                        responseText = util.format("TinyG reported an syntax error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                        io.sockets.emit('data', responseText);
+                                        writeLog("Response: " + responseText + jsObject, 3);
+                                    } else if (footer[1] === 20) {
+                                        responseText = util.format("TinyG reported an internal error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                        io.sockets.emit('data', responseText);
+                                        writeLog("Response: " + responseText + jsObject, 3);
+                                    } else if (footer[1] === 202) {
+                                        responseText = util.format("TinyG reported an TOO SHORT MOVE on line %d", jsObject.r.n);
+                                        io.sockets.emit('data', responseText);
+                                        writeLog("Response: " + responseText + jsObject, 3);
+                                    } else if (footer[1] === 204) {
+                                        responseText = util.format("TinyG reported COMMAND REJECTED BY ALARM '%s'", JSON.stringify(jsObject.r));
+                                        io.sockets.emit('data', responseText);
+                                        writeLog("InAlarm: " + responseText + jsObject, 3);
+                                    } else if (footer[1] !== 0) {
+                                        responseText = util.format("TinyG reported an error reading '%s': %d (based on %d bytes read)", JSON.stringify(jsObject.r), footer[1], footer[2]);
+                                        io.sockets.emit('data', responseText);
+                                        writeLog("Response: " + responseText + jsObject, 3);
+                                    } else {
+                                        //io.sockets.emit('data', data);
+                                    }
+                                }
+                                //writeLog('Response: ' + JSON.stringify(jsObject.r) + ', ' + footer, 3);
+                                jsObject = jsObject.r;
+
+                                tinygBufferSize++;
+                                blocked = false;
+                                send1Q();
+                            }
+                            if (jsObject.hasOwnProperty('sr')) {    // status report
+                                //writeLog('statusChanged ' + JSON.stringify(jsObject.sr), 3);
+                                var send = false;
+                                if (jsObject.sr.posx != null) {
+                                    xPos = parseFloat(jsObject.sr.posx).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (jsObject.sr.posy != null) {
+                                    yPos = parseFloat(jsObject.sr.posy).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (jsObject.sr.posz != null) {
+                                    zPos = parseFloat(jsObject.sr.posz).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (jsObject.sr.posa != null) {
+                                    aPos = parseFloat(jsObject.sr.posa).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (send) {
+                                    io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                    //writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos + ', ' + aPos, 3);
+                                }
+                                if (jsObject.sr.stat) {
+                                    var status = null;
+                                    switch (jsObject.sr.stat) {
+                                        case 0:     // initializing
+                                            status = 'Init';
+                                            break;
+                                        case 1:     // ready
+                                            status = 'Idle';
+                                            break;
+                                        case 2:     // shutdown
+                                            status = 'Alarm';
+                                            break;
+                                        case 3:     // stop
+                                            status = 'Idle';
+                                            break;
+                                        case 4:     // end
+                                            status = 'Idle';
+                                            break;
+                                        case 5:     // run
+                                            status = 'Run';
+                                            break;
+                                        case 6:     // hold
+                                            status = 'Hold';
+                                            break;
+                                        case 7:     // probe cycle
+                                            status = 'Probe';
+                                            break;
+                                        case 8:     // running / cycling
+                                            status = 'Run';
+                                            break;
+                                        case 9:     // homing
+                                            status = 'Home';
+                                            break;
+                                    }
+                                    if (status) {
+                                        io.sockets.emit('data', '<' + status + ',>');
+                                        //writeLog('Status: ' + status, 3);
+                                    }
+                                }
+                            }
+                            if (jsObject.hasOwnProperty('fb')) {    // firmware
+                                firmware = 'tinyg';
+                                fVersion = jsObject.fb;
+                                fDate = '';
+                                writeLog('TinyG detected (' + fVersion + ')', 1);
+                                io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+                                // Start intervall for status queries
+    //                            statusLoop = setInterval(function () {
+    //                                if (isConnected) {
+    //                                    machineSend('{sr:n}\n');
+    //                                    //writeLog('Sent: {"sr":null}', 2);
+    //                                }
+    //                            }, 250);
+                            }
+                            if (jsObject.hasOwnProperty('gc')) {
+                                writeLog('gcodeReceived ' + jsObject.r.gc, 3);
+                                io.sockets.emit('data', data);
+                            }
+                            if (jsObject.hasOwnProperty('rx')) {
+                                writeLog('rxReceived ' + jsObject.r.rx, 3);
+                                io.sockets.emit('data', data);
+                            }
+                            if (jsObject.hasOwnProperty('er')) {
+                                writeLog('errorReport ' + jsObject.er, 3);
+                                io.sockets.emit('data', data);
+                            }
+                            //io.sockets.emit('data', data);
+                        } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
+                            switch (firmware) {
+                            case 'grbl':
+                                grblBufferSize.shift();
+                                var alarmCode = parseInt(data.split(':')[1]);
+                                writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                                io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
+                                break;
+                            case 'smoothie':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'tinyg':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'repetier':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'marlinkimbra':
+                                io.sockets.emit('data', data);
+                                break;
+                            }
+                        } else if (data.indexOf('wait') === 0) { // Got wait from Repetier -> ignore
+                            // do nothing
+                        } else if (data.indexOf('Resend') === 0) { // Got resend from Repetier -> TODO: resend corresponding line!!!
+                            switch (firmware) {
+                            case 'repetier':
+                                break;
+                            case 'marlinkimbra':
+                                break;
+                            }
+                        } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
+                            switch (firmware) {
+                            case 'grbl':
+                                grblBufferSize.shift();
+                                var errorCode = parseInt(data.split(':')[1]);
+                                writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                                io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
+                                break;
+                            case 'smoothie':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'tinyg':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'repetier':
+                                io.sockets.emit('data', data);
+                                break;
+                            case 'marlinkimbra':
+                                io.sockets.emit('data', data);
+                                break;
+                            }
+                        } else if (data === ' ') {
+                            // nothing
+                        } else {
                             io.sockets.emit('data', data);
                         }
-                        if (jsObject.hasOwnProperty('rx')) {
-                            writeLog('rxReceived ' + jsObject.r.rx, 3);
-                            io.sockets.emit('data', data);
-                        }
-                        if (jsObject.hasOwnProperty('er')) {
-                            writeLog('errorReport ' + jsObject.er, 3);
-                            io.sockets.emit('data', data);
-                        }
-                        //io.sockets.emit('data', data);
-                    } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
-                        switch (firmware) {
-                        case 'grbl':
-                            grblBufferSize.shift();
-                            var alarmCode = parseInt(data.split(':')[1]);
-                            writeLog('ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
-                            io.sockets.emit('data', 'ALARM: ' + alarmCode + ' - ' + grblStrings.alarms(alarmCode));
-                            break;
-                        case 'smoothie':
-                            io.sockets.emit('data', data);
-                            break;
-                        case 'tinyg':
-                            io.sockets.emit('data', data);
-                            break;
-                        case 'repetier':
-                            io.sockets.emit('data', data);
-                            break;
-                        case 'marlinkimbra':
-                            io.sockets.emit('data', data);
-                            break;
-                        }
-                    } else if (data.indexOf('wait') === 0) { // Got wait from Repetier -> ignore
-                        // do nothing
-                    } else if (data.indexOf('Resend') === 0) { // Got resend from Repetier -> TODO: resend corresponding line!!!
-                        switch (firmware) {
-                        case 'repetier':
-                            break;
-                        case 'marlinkimbra':
-                            break;
-                        }
-                    } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
-                        switch (firmware) {
-                        case 'grbl':
-                            grblBufferSize.shift();
-                            var errorCode = parseInt(data.split(':')[1]);
-                            writeLog('error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
-                            io.sockets.emit('data', 'error: ' + errorCode + ' - ' + grblStrings.errors(errorCode));
-                            break;
-                        case 'smoothie':
-                            io.sockets.emit('data', data);
-                            break;
-                        case 'tinyg':
-                            io.sockets.emit('data', data);
-                            break;
-                        case 'repetier':
-                            io.sockets.emit('data', data);
-                            break;
-                        case 'marlinkimbra':
-                            io.sockets.emit('data', data);
-                            break;
-                        }
-                    } else if (data === ' ') {
-                        // nothing
-                    } else {
-                        io.sockets.emit('data', data);
+                        break;
                     }
                 });
                 break;
@@ -1258,7 +1297,7 @@ io.sockets.on('connection', function (appSocket) {
                         if (data.length > 0) {
                             writeLog('Recv: ' + data, 3);
                             if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
-                                if (firmware === 'grbl') {
+                                if (firmware === 'grbl' || firmware === 'lasaurgrbl') {
                                     grblBufferSize.shift();
                                 }
                                 if (firmware === 'repetier' || firmware === 'marlinkimbra') {
@@ -2614,7 +2653,11 @@ function grblBufferSpace() {
     for (var i = 0; i < len; i++) {
         total += grblBufferSize[i];
     }
-    return GRBL_RX_BUFFER_SIZE - total;
+    if (firmware === 'lasaurgrbl') {
+        return LASAUR_RX_BUFFER_SIZE - total;
+    } else {
+        return GRBL_RX_BUFFER_SIZE - total;
+    }
 }
 
 
@@ -2728,6 +2771,22 @@ function send1Q() {
                 writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
             }
             break;
+        case 'lasaurgrbl':
+            while ((queueLen - queuePointer) > 0 && !blocked && !paused) {
+                spaceLeft = grblBufferSpace();
+                gcodeLen = gcodeQueue[queuePointer].length;
+                if (gcodeLen < spaceLeft) {
+                    gcode = gcodeQueue[queuePointer];
+                    queuePointer++;
+                    grblBufferSize.push(gcodeLen + 1);
+                    var cmd = lsEncodeCmd(gcode);
+                    machineSend(cmd + '\n');
+                    writeLog('Sent: ' + gcode + ' Q: ' + (queueLen - queuePointer) + ' Bspace: ' + (spaceLeft - gcodeLen - 1), 2);
+                } else {
+                    blocked = true;
+                }
+            }
+            break;
         }
         var finishTime, elapsedTimeMS, elapsedTime, speed;
         if (startTime && (queuePointer - queuePos) >= 500) {
@@ -2791,4 +2850,89 @@ function writeLog(line, verb) {
         line = line.split(String.fromCharCode(0x1B) + '[94m').join('');
         logFile.write(time + ' ' + line + '\r\n');
     }
+}
+
+function lsEncodeCmd(gcode) {
+    var start, end;
+    var value = '';
+    var res = '';
+    if (gcode.search(/g1/i) >= 0){
+        //Line command
+        start = gcode.search(/x/i) + 1;
+        if (start > 0) {
+            end = gcode.substr(start).search(/\s|(a..z)/i);
+            if (end > 0) {
+                value = parseFloat(gcode.substr(start, end));
+            } else {
+                value = parseFloat(gcode.substr(start));
+            }
+            res += lsEncodeParam('x', value);
+        }
+        start = gcode.search(/y/i) + 1;
+        if (start > 0) {
+            end = gcode.substr(start).search(/\s|(a..z)/i);
+            if (end > 0) {
+                value = parseFloat(gcode.substr(start, end));
+            } else {
+                value = parseFloat(gcode.substr(start));
+            }
+            res += lsEncodeParam('y', value);
+        }
+        start = gcode.search(/z/i) + 1;
+        if (start > 0) {
+            end = gcode.substr(start).search(/\s|(a..z)/i);
+            if (end > 0) {
+                value = parseFloat(gcode.substr(start, end));
+            } else {
+                value = parseFloat(gcode.substr(start));
+            }
+            res += lsEncodeParam('z', value);
+        }
+        start = gcode.search(/s/i) + 1;
+        if (start > 0) {
+            end = gcode.substr(start).search(/\s|(a..z)/i);
+            if (end > 0) {
+                value = parseFloat(gcode.substr(start, end));
+            } else {
+                value = parseFloat(gcode.substr(start));
+            }
+            res += lsEncodeParam('s', value);
+        }
+        start = gcode.search(/f/i) + 1;
+        if (start > 0) {
+            end = gcode.substr(start).search(/\s|(a..z)/i);
+            if (end > 0) {
+                value = parseFloat(gcode.substr(start, end));
+            } else {
+                value = parseFloat(gcode.substr(start));
+            }
+            res += lsEncodeParam('f', value);
+        }
+        res += 'B';
+        
+//        var string = res;
+//        var PADDING = "000";
+//        var resultArray = [];
+//        for (var i = 0; i < string.length; i++) {
+//          var compact = string.charCodeAt(i).toString(10);
+//          //var padded = PADDING.substring(0, PADDING.length - compact.length) + compact;
+//          resultArray.push(compact);
+//        }
+//        console.log(resultArray);
+        
+        return res;
+    }
+}
+
+function lsEncodeParam(param, val) {
+        // num to be [-134217.728, 134217.727], [-2**27, 2**27-1]
+        // three decimals are retained
+        var num = parseInt(Math.round(((val + 134217.728) * 1000)));
+        var cmd = '';
+        cmd = String.fromCharCode((num & 127) + 128);
+        cmd += String.fromCharCode(((num & (127 << 7)) >> 7) + 128);
+        cmd += String.fromCharCode(((num & (127 << 14)) >> 14) + 128);
+        cmd += String.fromCharCode(((num & (127 << 21)) >> 21) + 128);
+        cmd += param;
+        return cmd;
 }
