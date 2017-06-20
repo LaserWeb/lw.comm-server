@@ -1,5 +1,12 @@
 #laserweb
 
+# Subforlders #
+###############
+node_modules
+release
+dist
+app
+
 # Compiled source #
 ###################
 *.com
@@ -39,10 +46,7 @@ Icon?
 ehthumbs.db
 Thumbs.db
 *~
-node_modules
-release
-dist
-app/lw4
+
 # Local settings #
 ##################
 .env
