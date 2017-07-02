@@ -1894,6 +1894,24 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
+    appSocket.on('setPosition', function (data) {
+        writeLog(chalk.red('setPosition(' + JSON.stringify(data) + ')'), 1);
+        if (isConnected) {
+            if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
+                var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) + ' ' : '');
+                var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) + ' ' : '');
+                var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) + ' ' : '');
+                var aVal = (data.a !== undefined ? 'A' + parseFloat(data.a) + ' ' : '');
+                addQ('G10 L20 P0 ' + xVal + yVal + zVal + aVal);
+                send1Q();
+            }
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
     appSocket.on('home', function (data) {
         writeLog(chalk.red('home(' + data + ')'), 1);
         if (isConnected) {
