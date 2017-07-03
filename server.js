@@ -790,7 +790,7 @@ io.sockets.on('connection', function (appSocket) {
                                     setTimeout(function () {  // Wait for TinyG to answer
                                         if (!firmware) {     // If still not set
                                             machineSend('M115\n'); // Check if it's Repetier
-                                            repetierBufferSize--;
+                                            reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
                                     }, 1000);
@@ -1201,7 +1201,7 @@ io.sockets.on('connection', function (appSocket) {
                                     setTimeout(function () {  // Wait for TinyG to answer
                                         if (!firmware) {     // If still not set
                                             machineSend('M115\n'); // Check if it's Repetier
-                                            repetierBufferSize--;
+                                            reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
                                     }, 1000);
@@ -1219,8 +1219,8 @@ io.sockets.on('connection', function (appSocket) {
                                 gcodeQueue.length = 0; // dump the queye
                                 grblBufferSize.length = 0; // dump bufferSizes
                                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
-                                repetierWaitForPos = false;
+                                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                                reprapWaitForPos = false;
                                 clearInterval(queueCounter);
                                 clearInterval(statusLoop);
                                 machineSocket.close();
@@ -1448,11 +1448,11 @@ io.sockets.on('connection', function (appSocket) {
                                 // Start intervall for status queries
                                 statusLoop = setInterval(function () {
                                     if (isConnected) {
-                                        if (!repetierWaitForPos && repetierBufferSize > 0) {
-                                            repetierWaitForPos = true;
+                                        if (!reprapWaitForPos && reprapBufferSize > 0) {
+                                            reprapWaitForPos = true;
                                             machineSend('M114\n'); // query position
-                                            repetierBufferSize--;
-                                            writeLog('Sent: M114 (B' + repetierBufferSize + ')', 2);
+                                            reprapBufferSize--;
+                                            writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
                                         }
                                     }
                                 }, 250);
