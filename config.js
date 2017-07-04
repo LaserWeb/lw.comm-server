@@ -3,8 +3,8 @@ require('dotenv').load({ silent: true });
 var config = {};
 
 config.webPort = process.env.WEB_PORT || 8000;
-config.serverVersion = '4.0.109';
-config.apiVersion = '4.0.4';
+config.serverVersion = '4.0.113';
+config.apiVersion = '4.0.5';
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
 config.logLevel = process.env.LOG_LEVEL || 0;

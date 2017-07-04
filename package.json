@@ -1,6 +1,6 @@
 {
-  "name": "LaserWeb",
-  "version": "4.0.109",
+  "name": "lw.comm-server",
+  "version": "4.0.113",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "author": "github.com/LaserWeb",		
   "contributors": [

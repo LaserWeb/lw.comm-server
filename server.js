@@ -801,7 +801,7 @@ io.sockets.on('connection', function (appSocket) {
                                     setTimeout(function () {  // Wait for TinyG to answer
                                         if (!firmware) {     // If still not set
                                             machineSend('M115\n'); // Check if it's Repetier
-                                            repetierBufferSize--;
+                                            reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
                                     }, 1000);
@@ -1212,7 +1212,7 @@ io.sockets.on('connection', function (appSocket) {
                                     setTimeout(function () {  // Wait for TinyG to answer
                                         if (!firmware) {     // If still not set
                                             machineSend('M115\n'); // Check if it's Repetier
-                                            repetierBufferSize--;
+                                            reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
                                     }, 1000);
@@ -1230,8 +1230,8 @@ io.sockets.on('connection', function (appSocket) {
                                 gcodeQueue.length = 0; // dump the queye
                                 grblBufferSize.length = 0; // dump bufferSizes
                                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
-                                repetierBufferSize = REPETIER_RX_BUFFER_SIZE; // reset repetierBufferSize
-                                repetierWaitForPos = false;
+                                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                                reprapWaitForPos = false;
                                 clearInterval(queueCounter);
                                 clearInterval(statusLoop);
                                 machineSocket.close();
@@ -1459,11 +1459,11 @@ io.sockets.on('connection', function (appSocket) {
                                 // Start intervall for status queries
                                 statusLoop = setInterval(function () {
                                     if (isConnected) {
-                                        if (!repetierWaitForPos && repetierBufferSize > 0) {
-                                            repetierWaitForPos = true;
+                                        if (!reprapWaitForPos && reprapBufferSize > 0) {
+                                            reprapWaitForPos = true;
                                             machineSend('M114\n'); // query position
-                                            repetierBufferSize--;
-                                            writeLog('Sent: M114 (B' + repetierBufferSize + ')', 2);
+                                            reprapBufferSize--;
+                                            writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
                                         }
                                     }
                                 }, 250);
@@ -1933,6 +1933,24 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             }
             send1Q();
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
+    appSocket.on('setPosition', function (data) {
+        writeLog(chalk.red('setPosition(' + JSON.stringify(data) + ')'), 1);
+        if (isConnected) {
+            if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
+                var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) + ' ' : '');
+                var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) + ' ' : '');
+                var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) + ' ' : '');
+                var aVal = (data.a !== undefined ? 'A' + parseFloat(data.a) + ' ' : '');
+                addQ('G10 L20 P0 ' + xVal + yVal + zVal + aVal);
+                send1Q();
+            }
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
