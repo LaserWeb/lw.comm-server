@@ -2367,7 +2367,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (firmware) {
             case 'smoothie':
                 machineSend('play ' + data + '/n');
-                writeLog('Sent: mv', 2);
+                writeLog('Sent: play', 2);
                 break;
             case 'marlin':
                 machineSend('M23 ' + data + '/n');
