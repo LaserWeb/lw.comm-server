@@ -1918,7 +1918,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (data) {
             case 'x':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 X');
@@ -1931,7 +1931,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'y':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 Y');
@@ -1944,7 +1944,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'z':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 Z');
@@ -1957,7 +1957,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'a':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 E1');
@@ -1973,7 +1973,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'grbl':
                     addQ('$H');
                     break;
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 X Y Z');
@@ -1989,7 +1989,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'grbl':
                     addQ('$H');
                     break;
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 X Y Z E');
@@ -2013,7 +2013,7 @@ io.sockets.on('connection', function (appSocket) {
         writeLog(chalk.red('probe(' + JSON.stringify(data) + ')'), 1);
         if (isConnected) {
             switch (firmware) {
-            case 'smothie':
+            case 'smoothie':
                 switch (data.direction) {
                 case 'z':
                     addQ('G30 Z' + data.probeOffset);
