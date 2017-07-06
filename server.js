@@ -2840,7 +2840,11 @@ function writeLog(line, verb) {
     }
     if (config.logLevel>0 && verb<=config.logLevel) {
         if (!logFile) {
-            logFile = fs.createWriteStream('logfile.txt');
+            if (!process.versions.electron){
+                logFile = fs.createWriteStream('logfile.txt');
+            } else {
+                logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
+            }
         }
         var time = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
         line = line.split(String.fromCharCode(0x1B) + '[31m').join('');
@@ -2856,7 +2860,6 @@ function writeLog(line, verb) {
         logFile.write(time + ' ' + line + '\r\n');
     }
 }
-
 
 
 // Electron app
