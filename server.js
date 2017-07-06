@@ -1964,7 +1964,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (data) {
             case 'x':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 X');
@@ -1977,7 +1977,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'y':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 Y');
@@ -1990,7 +1990,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'z':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 Z');
@@ -2003,7 +2003,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'a':
                 switch (firmware) {
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 E1');
@@ -2019,7 +2019,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'grbl':
                     addQ('$H');
                     break;
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 X Y Z');
@@ -2035,7 +2035,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'grbl':
                     addQ('$H');
                     break;
-                case 'smothie':
+                case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 X Y Z E');
@@ -2059,7 +2059,7 @@ io.sockets.on('connection', function (appSocket) {
         writeLog(chalk.red('probe(' + JSON.stringify(data) + ')'), 1);
         if (isConnected) {
             switch (firmware) {
-            case 'smothie':
+            case 'smoothie':
                 switch (data.direction) {
                 case 'z':
                     addQ('G30 Z' + data.probeOffset);
@@ -2833,6 +2833,15 @@ function send1Q() {
     }
 }
 
+function isElectron() {
+    if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
+        return true;
+    }
+    if (typeof process !== 'undefined' && process.versions && !!process.versions.electron) {
+        return true;
+    }
+    return false;
+}
 
 function writeLog(line, verb) {
     if (verb<=config.verboseLevel) {
@@ -2840,7 +2849,7 @@ function writeLog(line, verb) {
     }
     if (config.logLevel>0 && verb<=config.logLevel) {
         if (!logFile) {
-            if (!process.versions.electron){
+            if (!isElectron()){
                 logFile = fs.createWriteStream('logfile.txt');
             } else {
                 logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
