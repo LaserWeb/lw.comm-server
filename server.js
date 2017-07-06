@@ -2787,6 +2787,15 @@ function send1Q() {
     }
 }
 
+function isElectron() {
+    if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
+        return true;
+    }
+    if (typeof process !== 'undefined' && process.versions && !!process.versions.electron) {
+        return true;
+    }
+    return false;
+}
 
 function writeLog(line, verb) {
     if (verb<=config.verboseLevel) {
@@ -2794,7 +2803,7 @@ function writeLog(line, verb) {
     }
     if (config.logLevel>0 && verb<=config.logLevel) {
         if (!logFile) {
-            if (!process.versions.electron){
+            if (!isElectron()){
                 logFile = fs.createWriteStream('logfile.txt');
             } else {
                 logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
