@@ -25,21 +25,23 @@
 
 */
 
-var config = require('./config');
-var serialport = require('serialport');
+const config = require('./config');
+const serialport = require('serialport');
 var SerialPort = serialport;
-var websockets = require('socket.io');
-var http = require('http');
-var WebSocket = require('ws');
-var net = require('net');
-var fs = require('fs');
-var nstatic = require('node-static');
-var url = require('url');
-var util = require('util');
-var chalk = require('chalk');
+const websockets = require('socket.io');
+const http = require('http');
+const WebSocket = require('ws');
+const net = require('net');
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
+const nstatic = require('node-static');
+const url = require('url');
+const util = require('util');
+const chalk = require('chalk');
 var request = require('request'); // proxy for remote webcams
 
-var grblStrings = require('./grblStrings.js');
+const grblStrings = require('./grblStrings.js');
 
 //var EventEmitter = require('events').EventEmitter;
 //var qs = require('querystring');
@@ -89,7 +91,6 @@ var reprapWaitForPos = false;
 var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 
-const path = require('path');
 
 //Cartesian to Polar Transformation
 var W = 795;
@@ -159,6 +160,11 @@ io.sockets.on('connection', function (appSocket) {
     // save new connection
     connections.push(appSocket);
     writeLog(chalk.yellow('App connected! (id=' + connections.indexOf(appSocket) + ')'), 1);
+
+    if (isElectron()){
+        appSocket.emit('data', 'LaserWeb running as Electron App');
+        appSocket.emit('data', 'App path is ' + path.join(electronApp.getPath('userData')));
+    }
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
@@ -2849,11 +2855,13 @@ function writeLog(line, verb) {
     }
     if (config.logLevel>0 && verb<=config.logLevel) {
         if (!logFile) {
-            if (!isElectron()){
-                logFile = fs.createWriteStream('logfile.txt');
-            } else {
+            if (os.platform == 'darwin') {
+                //io.sockets.emit('data', 'Running on Darwin (macOS)');
                 logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
+            } else {
+                logFile = fs.createWriteStream('./logfile.txt');
             }
+            logFile.on('error', function(e) { console.error(e); });
         }
         var time = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
         line = line.split(String.fromCharCode(0x1B) + '[31m').join('');
