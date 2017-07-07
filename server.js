@@ -39,8 +39,7 @@ const nstatic = require('node-static');
 const url = require('url');
 const util = require('util');
 const chalk = require('chalk');
-var request = require('request'); // proxy for remote webcams
-
+const request = require('request'); // proxy for remote webcams
 const grblStrings = require('./grblStrings.js');
 
 //var EventEmitter = require('events').EventEmitter;
