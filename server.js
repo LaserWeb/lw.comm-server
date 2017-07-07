@@ -25,21 +25,21 @@
 
 */
 
-var config = require('./config');
-var serialport = require('serialport');
+const config = require('./config');
+const serialport = require('serialport');
 var SerialPort = serialport;
-var websockets = require('socket.io');
-var http = require('http');
-var WebSocket = require('ws');
-var net = require('net');
-var fs = require('fs');
-var nstatic = require('node-static');
-var url = require('url');
-var util = require('util');
-var chalk = require('chalk');
-var request = require('request'); // proxy for remote webcams
-
-var grblStrings = require('./grblStrings.js');
+const websockets = require('socket.io');
+const http = require('http');
+const WebSocket = require('ws');
+const net = require('net');
+const os = require('os');
+const fs = require('fs');
+const nstatic = require('node-static');
+const url = require('url');
+const util = require('util');
+const chalk = require('chalk');
+const request = require('request'); // proxy for remote webcams
+const grblStrings = require('./grblStrings.js');
 
 //var EventEmitter = require('events').EventEmitter;
 //var qs = require('querystring');
@@ -2803,11 +2803,7 @@ function writeLog(line, verb) {
     }
     if (config.logLevel>0 && verb<=config.logLevel) {
         if (!logFile) {
-            if (!isElectron()){
-                logFile = fs.createWriteStream('logfile.txt');
-            } else {
-                logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
-            }
+            logFile = fs.createWriteStream('./logfile.txt');
         }
         var time = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
         line = line.split(String.fromCharCode(0x1B) + '[31m').join('');
