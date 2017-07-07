@@ -2803,7 +2803,13 @@ function writeLog(line, verb) {
     }
     if (config.logLevel>0 && verb<=config.logLevel) {
         if (!logFile) {
-            logFile = fs.createWriteStream('./logfile.txt');
+            if (os.platform == 'darwin') {
+                //io.sockets.emit('data', 'Running on Darwin (macOS)');
+                logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
+            } else {
+                logFile = fs.createWriteStream('./logfile.txt');
+            }
+            logFile.on('error', function(e) { console.error(e); });
         }
         var time = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
         line = line.split(String.fromCharCode(0x1B) + '[31m').join('');
