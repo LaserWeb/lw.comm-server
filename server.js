@@ -2854,7 +2854,7 @@ function writeLog(line, verb) {
     }
     if (config.logLevel>0 && verb<=config.logLevel) {
         if (!logFile) {
-            if (os.platform == 'darwin') {
+            if (isElectron() && os.platform == 'darwin') {
                 //io.sockets.emit('data', 'Running on Darwin (macOS)');
                 logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
             } else {
