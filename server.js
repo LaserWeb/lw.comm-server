@@ -41,6 +41,7 @@ const util = require('util');
 const chalk = require('chalk');
 const request = require('request'); // proxy for remote webcams
 const grblStrings = require('./grblStrings.js');
+const firmwareFeatures = require('./firmwareFeatures.js');
 
 //var EventEmitter = require('events').EventEmitter;
 //var qs = require('querystring');
@@ -200,7 +201,7 @@ io.sockets.on('connection', function (appSocket) {
     } else {
         appSocket.emit('connectStatus', 'Connect');
     }
-
+    
     appSocket.on('firstLoad', function () {
         writeLog(chalk.yellow('INFO: ') + chalk.blue('FirstLoad called'), 1);
         appSocket.emit('serverConfig', config);
@@ -279,6 +280,10 @@ io.sockets.on('connection', function (appSocket) {
 
     appSocket.on('getFirmware', function (data) { // Deliver Firmware to Web-Client
         appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
+    });
+
+    appSocket.on('getFeatureList', function (data) { // Deliver supported Firmware Features to Web-Client
+        appSocket.emit('featureList', firmwareFeatures.get(firmware));
     });
 
     appSocket.on('getRunningJob', function (data) { // Deliver running Job to Web-Client
