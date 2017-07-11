@@ -89,6 +89,7 @@ var reprapWaitForPos = false;
 
 var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
+var has4thAxis = false;
 
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
@@ -382,75 +383,134 @@ io.sockets.on('connection', function (appSocket) {
                         var state = data.substring(1, data.search(/(,|\|)/));
                         //appSocket.emit('runStatus', state);
                         io.sockets.emit('data', data);
-                        // Extract wPos
-                        var startWPos = data.search(/wpos:/i) + 5;
-                        var wPos;
-                        if (startWPos > 5) {
-                            wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 4);
+                        if (firmware == 'grbl') {
+                            // Extract wPos (for Grbl > 1.1 only!)
+                            var startWPos = data.search(/wpos:/i) + 5;
+                            var wPos;
+                            if (startWPos > 5) {
+                                var wPosLen = data.substr(startWPos).search(/>|\|/);
+                                wPos = data.substr(startWPos, wPosLen).split(/,/);
+                            }
+                            if (Array.isArray(wPos)) {
+                                var send = true;
+                                if (xPos !== parseFloat(wPos[0]).toFixed(config.posDecimals)) {
+                                    xPos = parseFloat(wPos[0]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (yPos !== parseFloat(wPos[1]).toFixed(config.posDecimals)) {
+                                    yPos = parseFloat(wPos[1]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (zPos !== parseFloat(wPos[2]).toFixed(config.posDecimals)) {
+                                    zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
+                                    send = true;
+                                }
+                                if (wPos.length > 3) {
+                                    if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
+                                        aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
+                                        send = true;
+                                        has4thAxis = true;
+                                    }
+                                }
+                                if (send) {
+                                    if (has4thAxis) {
+                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                    } else {
+                                        io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                    }
+                                }
+                            }
+                            // Extract work offset (for Grbl > 1.1 only!)
+                            var startWCO = data.search(/wco:/i) + 4;
+                            var wco;
+                            if (startWCO > 4) {
+                                wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
+                            }
+                            if (Array.isArray(wco)) {
+                                xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
+                                yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
+                                zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
+                                if (has4thAxis) {
+                                    aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
+                                }
+                                if (send) {
+                                    if (has4thAxis) {
+                                        io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                    } else {
+                                        io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset});
+                                    }
+                                }
+                            }
                         }
-                        if (Array.isArray(wPos)) {
-                            var send = true;
-                            if (xPos !== parseFloat(wPos[0]).toFixed(config.posDecimals)) {
-                                xPos = parseFloat(wPos[0]).toFixed(config.posDecimals);
-                                send = true;
+                        if (firmware == 'smoothie') {
+                            // Extract wPos (for Smoothieware only!)
+                            var startWPos = data.search(/wpos:/i) + 5;
+                            var wPos;
+                            if (startWPos > 5) {
+                                wPos = data.replace('>', '').substr(startWPos).split(/,/, 4);
                             }
-                            if (yPos !== parseFloat(wPos[1]).toFixed(config.posDecimals)) {
-                                yPos = parseFloat(wPos[1]).toFixed(config.posDecimals);
-                                send = true;
+                            if (Array.isArray(wPos)) {
+                                var send = true;
+                                if (xPos !== wPos[0]) {
+                                    xPos = wPos[0];
+                                    send = true;
+                                }
+                                if (yPos !== wPos[1]) {
+                                    yPos = wPos[1];
+                                    send = true;
+                                }
+                                if (zPos !== wPos[2]) {
+                                    zPos = wPos[2];
+                                    send = true;
+                                }
+                                if (wPos.length > 3) {
+                                    if (aPos !== wPos[3]) {
+                                        aPos = wPos[3];
+                                        send = true;
+                                        has4thAxis = true;
+                                    }
+                                }
+                                if (send) {
+                                    if (has4thAxis) {
+                                        io.sockets.emit('wPos', {x: parseFloat(xPos).toFixed(config.posDecimals), y: parseFloat(yPos).toFixed(config.posDecimals), z: parseFloat(zPos).toFixed(config.posDecimals), a: parseFloat(aPos).toFixed(config.posDecimals)});
+                                    } else {
+                                        io.sockets.emit('wPos', {x: parseFloat(xPos).toFixed(config.posDecimals), y: parseFloat(yPos).toFixed(config.posDecimals), z: parseFloat(zPos).toFixed(config.posDecimals)});
+                                    }
+                                }
                             }
-                            if (zPos !== parseFloat(wPos[2]).toFixed(config.posDecimals)) {
-                                zPos = parseFloat(wPos[2]).toFixed(config.posDecimals);
-                                send = true;
+                            // Extract mPos (for Smoothieware only!)
+                            var startMPos = data.search(/mpos:/i) + 5;
+                            var mPos;
+                            if (startMPos > 5) {
+                                mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
                             }
-                            if (aPos !== parseFloat(wPos[3]).toFixed(config.posDecimals)) {
-                                aPos = parseFloat(wPos[3]).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (send) {
-                                io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
-                            }
-                        }
-                        // Extract mPos (for smoothieware only!)
-                        var startMPos = data.search(/mpos:/i) + 5;
-                        var mPos;
-                        if (startMPos > 5) {
-                            mPos = data.replace('>', '').substr(startMPos).split(/,|\|/, 4);
-                        }
-                        if (Array.isArray(mPos)) {
-                            var send = false;
-                            if (xOffset !== parseFloat(mPos[0] - xPos).toFixed(config.posDecimals)) {
-                                xOffset = parseFloat(mPos[0] - xPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (yOffset !== parseFloat(mPos[1] - yPos).toFixed(config.posDecimals)) {
-                                yOffset = parseFloat(mPos[1] - yPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (zOffset !== parseFloat(mPos[2] - zPos).toFixed(config.posDecimals)) {
-                                zOffset = parseFloat(mPos[2] - zPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (aOffset !== parseFloat(mPos[3] - aPos).toFixed(config.posDecimals)) {
-                                aOffset = parseFloat(mPos[3] - aPos).toFixed(config.posDecimals);
-                                send = true;
-                            }
-                            if (send) {
-                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
-                            }
-                        }
-                        // Extract work offset (for Grbl > 1.1 only!)
-                        var startWCO = data.search(/wco:/i) + 4;
-                        var wco;
-                        if (startWCO > 4) {
-                            wco = data.replace('>', '').substr(startWCO).split(/,|\|/, 4);
-                        }
-                        if (Array.isArray(wco)) {
-                            xOffset = parseFloat(wco[0]).toFixed(config.posDecimals);
-                            yOffset = parseFloat(wco[1]).toFixed(config.posDecimals);
-                            zOffset = parseFloat(wco[2]).toFixed(config.posDecimals);
-                            aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
-                            if (send) {
-                                io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                            if (Array.isArray(mPos)) {
+                                var send = false;
+                                if (xOffset != mPos[0] - xPos) {
+                                    xOffset = mPos[0] - xPos;
+                                    send = true;
+                                }
+                                if (yOffset != mPos[1] - yPos) {
+                                    yOffset = mPos[1] - yPos;
+                                    send = true;
+                                }
+                                if (zOffset != mPos[2] - zPos) {
+                                    zOffset = mPos[2] - zPos;
+                                    send = true;
+                                }
+                                if (has4thAxis) {
+                                    if (aOffset != mPos[3] - aPos) {
+                                        aOffset = mPos[3] - aPos;
+                                        send = true;
+                                    }
+                                }
+                                if (send) {
+                                    if (has4thAxis) {
+                                        io.sockets.emit('wOffset', {x: parseFloat(xOffset).toFixed(config.posDecimals), y: parseFloat(yOffset).toFixed(config.posDecimals), z: parseFloat(zOffset).toFixed(config.posDecimals), a: parseFloat(aOffset).toFixed(config.posDecimals)});
+                                    } else {
+                                        io.sockets.emit('wOffset', {x: parseFloat(xOffset).toFixed(config.posDecimals), y: parseFloat(yOffset).toFixed(config.posDecimals), z: parseFloat(zOffset).toFixed(config.posDecimals)});
+                                    }
+                                }
                             }
                         }
                         // Extract override values (for Grbl > v1.1 only!)
@@ -515,6 +575,7 @@ io.sockets.on('connection', function (appSocket) {
                         io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                         //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
                         reprapWaitForPos = false;
+
                     } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                         firmware = 'grbl';
                         fVersion = data.substr(5, 4); // get version
