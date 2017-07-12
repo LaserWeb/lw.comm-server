@@ -1,6 +1,7 @@
 {
   "name": "lw.comm-server",
   "version": "4.0.115",
+  "license": "AGPL-3.0",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "author": "github.com/LaserWeb",		
   "contributors": [
@@ -9,12 +10,6 @@
     "Todd Fleming <jscut.org>",		
     "Jorge Robles <jorge.diego.robles@gmail.com>",  
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
-  ],
-  "licenses": [
-    {
-      "type": "AGPL-3.0",
-      "url": "http://www.gnu.org/licenses/agpl-3.0.txt"
-    }
   ],
   "repository": {
     "type": "git",
