@@ -2755,9 +2755,16 @@ function send1Q() {
                     if (gcodeLen < spaceLeft) {
                         gcode = gcodeQueue[queuePointer];
                         queuePointer++;
-                        grblBufferSize.push(gcodeLen + 1);
-                        machineSend(gcode + '\n');
-                        writeLog('Sent: ' + gcode + ' Q: ' + (queueLen - queuePointer) + ' Bspace: ' + (spaceLeft - gcodeLen - 1), 2);
+                        if (gcode == 'M0') {
+                            //stop execution for tool change
+                            paused = true;
+                            io.sockets.emit('runStatus', 'paused');
+                            writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + (queueLen - queuePointer) + ' Bspace: ' + (spaceLeft - gcodeLen - 1), 2);
+                        } else {
+                            machineSend(gcode + '\n');
+                            grblBufferSize.push(gcodeLen + 1);
+                            writeLog('Sent: ' + gcode + ' Q: ' + (queueLen - queuePointer) + ' Bspace: ' + (spaceLeft - gcodeLen - 1), 2);
+                        }
                     } else {
                         blocked = true;
                     }
@@ -2789,27 +2796,48 @@ function send1Q() {
                 if ((gcodeQueue.length  - queuePointer) > 0 && !blocked && !paused) {
                     gcode = gcodeQueue[queuePointer];
                     queuePointer++;
-                    blocked = true;
-                    machineSend(gcode + '\n');
-                    writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+                    if (gcode == 'M0') {
+                        //stop execution for tool change
+                        paused = true;
+                        io.sockets.emit('runStatus', 'paused');
+                        writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + gcodeQueue.length, 2);
+                    } else {
+                        blocked = true;
+                        machineSend(gcode + '\n');
+                        writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+                    }
                 }
             }
             break;
         case 'tinyg':
             while (tinygBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
                 gcode = gcodeQueue.shift();
-                machineSend(gcode + '\n');
-                tinygBufferSize--;
-                writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+                if (gcode == 'M0') {
+                    //stop execution for tool change
+                    paused = true;
+                    io.sockets.emit('runStatus', 'paused');
+                    writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + gcodeQueue.length, 2);
+                } else {
+                    machineSend(gcode + '\n');
+                    tinygBufferSize--;
+                    writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+                }
             }
             break;
         case 'repetier':
         case 'marlinkimbra':
             while (reprapBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
                 gcode = gcodeQueue.shift();
-                machineSend(gcode + '\n');
-                reprapBufferSize--;
-                writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+                if (gcode == 'M0') {
+                    //stop execution for tool change
+                    paused = true;
+                    io.sockets.emit('runStatus', 'paused');
+                    writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + gcodeQueue.length, 2);
+                } else {
+                    machineSend(gcode + '\n');
+                    reprapBufferSize--;
+                    writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+                }
             }
             break;
         }
