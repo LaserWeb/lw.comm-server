@@ -358,6 +358,11 @@ io.sockets.on('connection', function (appSocket) {
                     firmware = false;
                     paused = false;
                     blocked = false;
+                    gcodeQueue.length = 0; // dump the queye
+                    grblBufferSize.length = 0; // dump bufferSizes
+                    tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                    reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                    reprapWaitForPos = false;
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('Port closed'), 1);
                 });
 
@@ -902,6 +907,11 @@ io.sockets.on('connection', function (appSocket) {
                     firmware = false;
                     paused = false;
                     blocked = false;
+                    gcodeQueue.length = 0; // dump the queye
+                    grblBufferSize.length = 0; // dump bufferSizes
+                    tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                    reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                    reprapWaitForPos = false;
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connection closed'), 1);
                 });
 
@@ -1305,6 +1315,11 @@ io.sockets.on('connection', function (appSocket) {
                     firmware = false;
                     paused = false;
                     blocked = false;
+                    gcodeQueue.length = 0; // dump the queye
+                    grblBufferSize.length = 0; // dump bufferSizes
+                    tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+                    reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+                    reprapWaitForPos = false;
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connection closed'), 1);
                 });
 
