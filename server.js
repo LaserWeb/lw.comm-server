@@ -281,6 +281,13 @@ io.sockets.on('connection', function (appSocket) {
         if (!isConnected) {
             connectionType = data[0].toLowerCase();
             firmware = false;
+            clearInterval(queueCounter);
+            clearInterval(statusLoop);
+            gcodeQueue.length = 0; // dump the queye
+            grblBufferSize.length = 0; // dump bufferSizes
+            tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
+            reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+            reprapWaitForPos = false;
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
@@ -336,7 +343,6 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }, config.firmwareWaitTime * 1000);
                     }
-                    // machineSend("M115\n");    // Lets check if its Marlin?
 
                     writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
                     isConnected = true;
