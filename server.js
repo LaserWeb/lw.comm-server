@@ -53,7 +53,7 @@ var machineSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
 var statusLoop, queueCounter, listPortsLoop;
-var lastSent = '', paused = false, blocked = false, toolchange = false;
+var lastSent = '', paused = false, blocked = false, m0 = false;
 
 var firmware, fVersion, fDate;
 var feedOverride = 100;
@@ -159,7 +159,7 @@ io.sockets.on('connection', function (appSocket) {
         portsList = ports;
         appSocket.emit('ports', portsList);
     });
-    // reckeck ports every 2s
+    // recheck ports every 2s
     listPortsLoop = setInterval(function () {
         serialport.list(function (err, ports) {
             if (JSON.stringify(ports) != JSON.stringify(portsList)) {
@@ -1703,7 +1703,7 @@ io.sockets.on('connection', function (appSocket) {
     appSocket.on('runJob', function (data) {
         writeLog('Run Job (' + data.length + ')', 1);
         if (isConnected) {
-            if (!toolchange) {
+            if (!m0) {
                 if (data) {
                     runningJob = data;
                     data = data.split('\n');
@@ -1757,8 +1757,8 @@ io.sockets.on('connection', function (appSocket) {
                     }
                 }
             } else {
-                appSocket.emit('error', 'runJob not allowed during toolchange!');
-                writeLog(chalk.red('ERROR: ') + chalk.blue('runJob not allowed during toolchange!'), 1);
+                io.sockets.emit('error', 'runJob not allowed during M0 pause!');
+                writeLog(chalk.red('ERROR: ') + chalk.blue('runJob not allowed during M0 pause!'), 1);
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1770,24 +1770,19 @@ io.sockets.on('connection', function (appSocket) {
     appSocket.on('runCommand', function (data) {
         writeLog(chalk.red('Run Command (' + data.replace('\n', '|') + ')'), 1);
         if (isConnected) {
-            if (!toolchange) {
-                if (data) {
-                    data = data.split('\n');
-                    for (var i = 0; i < data.length; i++) {
-                        var line = data[i].split(';'); // Remove everything after ; = comment
-                        var tosend = line[0].trim();
-                        if (tosend.length > 0) {
-                            addQ(tosend);
-                        }
-                    }
-                    if (i > 0) {
-                        //io.sockets.emit('runStatus', 'running');
-                        send1Q();
+            if (data) {
+                data = data.split('\n');
+                for (var i = 0; i < data.length; i++) {
+                    var line = data[i].split(';'); // Remove everything after ; = comment
+                    var tosend = line[0].trim();
+                    if (tosend.length > 0) {
+                        addQ(tosend);
                     }
                 }
-            } else {
-                io.sockets.emit('error', 'runCommand not allowed during toolchange!');
-                writeLog(chalk.red('ERROR: ') + chalk.blue('runCommand not allowed during toolchange!'), 1);
+                if (i > 0) {
+                    //io.sockets.emit('runStatus', 'running');
+                    send1Q();
+                }
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1813,7 +1808,7 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
                 switch (firmware) {
                 case 'grbl':
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('$J=G91' + dir + dist + feed + '\n');
                         writeLog('Sent: $J=G91' + dir + dist + feed, 2);
                     } else {
@@ -1825,7 +1820,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'tinyg':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('G91\n');
                         writeLog('Sent: G91', 2);
                         machineSend('G0' + feed + dir + dist + '\n');
@@ -1865,7 +1860,7 @@ io.sockets.on('connection', function (appSocket) {
                 writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
                 switch (firmware) {
                 case 'grbl':
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('$J=G9' + mode + xVal + yVal + zVal + feed + '\n');
                         writeLog('Sent: $J=G9' + mode + xVal + yVal + zVal + feed, 2);
                     } else {
@@ -1877,7 +1872,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'tinyg':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('G9' + mode + '\n');
                         writeLog('Sent: G9' + mode, 2);
                         machineSend('G0' + feed + xVal + yVal + zVal + '\n');
@@ -1909,24 +1904,24 @@ io.sockets.on('connection', function (appSocket) {
     appSocket.on('setZero', function (data) {
         writeLog(chalk.red('setZero(' + data + ')'), 1);
         if (isConnected) {
-            if (!toolchange) {
+            if (!m0) {
                 switch (data) {
                 case 'x':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G10 L20 P0 X0');
                     } else {
-                        appSocket.emit('error', 'setZero(x) not allowed during toolchange!');
+                        appSocket.emit('error', 'setZero(x) not allowed during M0 pause!');
                     }
                     break;
                 case 'y':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G10 L20 P0 Y0');
                     } else {
-                        appSocket.emit('error', 'setZero(y) not allowed during toolchange!');
+                        appSocket.emit('error', 'setZero(y) not allowed during M0 pause!');
                     }
                     break;
                 case 'z':
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('G10 L20 P0 Z0\n');
                         writeLog('Sent: G10 L20 P0 Z0', 2);
                     } else {
@@ -1934,49 +1929,49 @@ io.sockets.on('connection', function (appSocket) {
                     }
                     break;
                 case 'a':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G10 L20 P0 A0');
                     } else {
-                        appSocket.emit('error', 'setZero(a) not allowed during toolchange!');
+                        appSocket.emit('error', 'setZero(a) not allowed during M0 pause!');
                     }
                     break;
                 case 'all':
                     switch (firmware) {
                     case 'repetier':
-                        if (!toolchange) {
+                        if (!m0) {
                             addQ('G92');
                         } else {
-                            appSocket.emit('error', 'setZero(all) not allowed during toolchange!');
+                            appSocket.emit('error', 'setZero(all) not allowed during M0 pause!');
                         }
                         break;
                     case 'marlinkimbra':
-                        if (!toolchange) {
+                        if (!m0) {
                             addQ('G92 X0 Y0 Z0');
                         } else {
-                            appSocket.emit('error', 'setZero(all) not allowed during toolchange!');
+                            appSocket.emit('error', 'setZero(all) not allowed during M0 pause!');
                         }
                         break;
                     default:
-                        if (!toolchange) {
+                        if (!m0) {
                             addQ('G10 L20 P0 X0 Y0 Z0');
                         } else {
-                            appSocket.emit('error', 'setZero(all) not allowed during toolchange!');
+                            appSocket.emit('error', 'setZero(all) not allowed during M0 pause!');
                         }
                         break;
                     }
                     break;
                 case 'xyza':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G10 L20 P0 X0 Y0 Z0 A0');
                     } else {
-                        appSocket.emit('error', 'setZero(xyza) not allowed during toolchange!');
+                        appSocket.emit('error', 'setZero(xyza) not allowed during M0 pause!');
                     }
                     break;
                 }
                 send1Q();
             } else {
-                io.sockets.emit('error', 'setZero not allowed during toolchange!');
-                writeLog(chalk.red('ERROR: ') + chalk.blue('setZero not allowed during toolchange!'), 1);
+                io.sockets.emit('error', 'setZero not allowed during M0 pause!');
+                writeLog(chalk.red('ERROR: ') + chalk.blue('setZero not allowed during M0 pause!'), 1);
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1990,7 +1985,7 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             switch (data) {
             case 'x':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G0 X0\n');
                     writeLog('Sent: G0 X0', 2);
                 } else {
@@ -1998,7 +1993,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 break;
             case 'y':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G0 Y0\n');
                     writeLog('Sent: G0 Y0', 2);
                 } else {
@@ -2006,7 +2001,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 break;
             case 'z':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G0 Z0\n');
                     writeLog('Sent: G0 Z0', 2);
                 } else {
@@ -2014,7 +2009,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 break;
             case 'a':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G0 A0\n');
                     writeLog('Sent: G0 A0', 2);
                 } else {
@@ -2022,7 +2017,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 break;
             case 'all':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G0 X0 Y0 Z0\n');
                     writeLog('Sent: G0 X0 Y0 Z0', 2);
                 } else {
@@ -2030,7 +2025,7 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 break;
             case 'xyza':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G0 X0 Y0 Z0 A0\n');
                     writeLog('Sent: G0 X0 Y0 Z0 A0', 2);
                 } else {
@@ -2073,16 +2068,16 @@ io.sockets.on('connection', function (appSocket) {
                 case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G28.2 X');
                     } else {
-                        appSocket.emit('error', 'homeX not allowed during toolchange!');
-                        writeLog('ERROR: Homing X not allowed during toolchange!', 1);
+                        io.sockets.emit('error', 'homeX not allowed during M0 pause!');
+                        writeLog('ERROR: Homing X not allowed during M0 pause!', 1);
                     }
                     break;
                 default:
                     //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
+                    io.sockets.emit('error', 'Command not supported by firmware!');
                     break;
                 }
                 break;
@@ -2091,16 +2086,16 @@ io.sockets.on('connection', function (appSocket) {
                 case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G28.2 Y');
                     } else {
-                        appSocket.emit('error', 'homeY not allowed during toolchange!');
-                        writeLog('ERROR: Homing Y not allowed during toolchange!', 1);
+                        io.sockets.emit('error', 'homeY not allowed during M0 pause!');
+                        writeLog('ERROR: Homing Y not allowed during M0 pause!', 1);
                     }
                     break;
                 default:
                     //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
+                    io.sockets.emit('error', 'Command not supported by firmware!');
                     break;
                 }
                 break;
@@ -2109,7 +2104,7 @@ io.sockets.on('connection', function (appSocket) {
                 case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('G28.2 Z\n');
                         writeLog('Sent: G28.2 Z', 2);
                     } else {
@@ -2118,7 +2113,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 default:
                     //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
+                    io.sockets.emit('error', 'Command not supported by firmware!');
                     break;
                 }
                 break;
@@ -2127,16 +2122,16 @@ io.sockets.on('connection', function (appSocket) {
                 case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G28.2 E1');
                     } else {
-                        appSocket.emit('error', 'homeA not allowed during toolchange!');
-                        writeLog('ERROR: Homing A not allowed during toolchange!', 1);
+                        io.sockets.emit('error', 'homeA not allowed during M0 pause!');
+                        writeLog('ERROR: Homing A not allowed during M0 pause!', 1);
                     }
                     break;
                 default:
                     //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
+                    io.sockets.emit('error', 'Command not supported by firmware!');
                     break;
                 }
                 break;
@@ -2148,42 +2143,42 @@ io.sockets.on('connection', function (appSocket) {
                 case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G28.2 X Y Z');
                     } else {
-                        appSocket.emit('error', 'Homing not allowed during toolchange!');
-                        writeLog('ERROR: Homing not allowed during toolchange!', 1);
+                        io.sockets.emit('error', 'Homing not allowed during M0 pause!');
+                        writeLog('ERROR: Homing not allowed during M0 pause!', 1);
                     }
                     break;
                 default:
                     //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
+                    io.sockets.emit('error', 'Command not supported by firmware!');
                     break;
                 }
                 break;
             case 'xyza':
                 switch (firmware) {
                 case 'grbl':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('$H');
                     } else {
-                        appSocket.emit('error', 'Homing not allowed during toolchange!');
-                        writeLog('ERROR: Homing not allowed during toolchange!', 1);
+                        io.sockets.emit('error', 'Homing not allowed during M0 pause!');
+                        writeLog('ERROR: Homing not allowed during M0 pause!', 1);
                     }
                     break;
                 case 'smoothie':
                 case 'repetier':
                 case 'marlinkimbra':
-                    if (!toolchange) {
+                    if (!m0) {
                         addQ('G28.2 X Y Z E');
                     } else {
-                        appSocket.emit('error', 'Homing not allowed during toolchange!');
-                        writeLog('ERROR: Homing not allowed during toolchange!', 1);
+                        io.sockets.emit('error', 'Homing not allowed during M0 pause!');
+                        writeLog('ERROR: Homing not allowed during M0 pause!', 1);
                     }
                     break;
                 default:
                     //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
+                    io.sockets.emit('error', 'Command not supported by firmware!');
                     break;
                 }
                 break;
@@ -2203,14 +2198,14 @@ io.sockets.on('connection', function (appSocket) {
             case 'smoothie':
                 switch (data.direction) {
                 case 'z':
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('G30 Z' + data.probeOffset + '\n');
                     } else {
                         addQ('G30 Z' + data.probeOffset);
                     }
                     break;
                 default:
-                    if (toolchange) {
+                    if (m0) {
                         machineSend('G38.2 ' + data.direction + '\n');
                     } else {
                         addQ('G38.2 ' + data.direction);
@@ -2218,7 +2213,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             case 'grbl':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G38.2 ' + data.direction + '-5 F1\n');
                     machineSend('G92 ' + data.direction + ' ' + data.probeOffset + '\n');
                 } else {
@@ -2228,7 +2223,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'repetier':
             case 'marlinkimbra':
-                if (toolchange) {
+                if (m0) {
                     machineSend('G38.2 ' + data.direction + '-5 F1\n');
                 } else {
                     addQ('G38.2 ' + data.direction + '-5 F1');
@@ -2236,7 +2231,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             default:
                 //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
+                io.sockets.emit('error', 'Command not supported by firmware!');
                 break;
             }
             send1Q();
@@ -2411,7 +2406,7 @@ io.sockets.on('connection', function (appSocket) {
                             addQ('G1F1');
                             addQ('M3S' + parseInt(power * maxS / 100));
                             laserTestOn = true;
-                            appSocket.emit('laserTest', power);
+                            io.sockets.emit('laserTest', power);
                             if (duration > 0) {
                                 addQ('G4 P' + duration / 1000);
                                 addQ('M5S0');
@@ -2424,7 +2419,7 @@ io.sockets.on('connection', function (appSocket) {
                             addQ('M3\n');
                             addQ('fire ' + power + '\n');
                             laserTestOn = true;
-                            appSocket.emit('laserTest', power);
+                            io.sockets.emit('laserTest', power);
                             if (duration > 0) {
                                 var divider = 1;
                                 if (fDate >= new Date('2017-01-02')) {
@@ -2435,7 +2430,7 @@ io.sockets.on('connection', function (appSocket) {
                                 addQ('M5');
                                 setTimeout(function () {
                                     laserTestOn = false;
-                                    appSocket.emit('laserTest', 0);
+                                    io.sockets.emit('laserTest', 0);
                                 }, duration );
                             }
                             send1Q();
@@ -2444,14 +2439,14 @@ io.sockets.on('connection', function (appSocket) {
                             addQ('G1F1');
                             addQ('M3S' + parseInt(power * maxS / 100));
                             laserTestOn = true;
-                            appSocket.emit('laserTest', power);
+                            io.sockets.emit('laserTest', power);
                             if (duration > 0) {
                                 addQ('G4 P' + duration / 1000);
                                 addQ('M5S0');
                                 laserTestOn = false;
                                 setTimeout(function () {
                                     laserTestOn = false;
-                                    appSocket.emit('laserTest', 0);
+                                    io.sockets.emit('laserTest', 0);
                                 }, duration );
                             }
                             send1Q();
@@ -2462,14 +2457,14 @@ io.sockets.on('connection', function (appSocket) {
                             addQ('M3 S' + parseInt(power * maxS / 100));
                             addQ('M4');
                             laserTestOn = true;
-                            appSocket.emit('laserTest', power);
+                            io.sockets.emit('laserTest', power);
                             if (duration > 0) {
                                 addQ('G4 P' + duration / 1000);
                                 addQ('M5');
                                 laserTestOn = false;
                                 setTimeout(function () {
                                     laserTestOn = false;
-                                    appSocket.emit('laserTest', 0);
+                                    io.sockets.emit('laserTest', 0);
                                 }, duration );
                             }
                             send1Q();
@@ -2499,7 +2494,7 @@ io.sockets.on('connection', function (appSocket) {
                         break;
                     }
                     laserTestOn = false;
-                    appSocket.emit('laserTest', 0);
+                    io.sockets.emit('laserTest', 0);
                 }
             }
         } else {
@@ -2511,7 +2506,7 @@ io.sockets.on('connection', function (appSocket) {
 
     appSocket.on('pause', function () {
         if (isConnected) {
-            if (!toolchange) {
+            if (!m0) {
                 paused = true;
                 writeLog(chalk.red('PAUSE'), 1);
                 switch (firmware) {
@@ -2539,8 +2534,8 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 io.sockets.emit('runStatus', 'paused');
             } else {
-                appSocket.emit('error', 'Pause not allowed during toolchange!');
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Pause not allowed during toolchange!'), 1);
+                io.sockets.emit('error', 'Pause not allowed during M0 pause!');
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Pause not allowed during M0 pause!'), 1);
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -2572,7 +2567,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             }
             paused = false;
-            toolchange = false;
+            m0 = false;
             send1Q(); // restart queue
             io.sockets.emit('runStatus', 'resumed');
 //            switch (connectionType) {
@@ -2651,7 +2646,7 @@ io.sockets.on('connection', function (appSocket) {
             runningJob = null;
             blocked = false;
             paused = false;
-            toolchange = false;
+            m0 = false;
             io.sockets.emit('runStatus', 'stopped');
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -2706,14 +2701,14 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog('Sent: $X', 2);
                     blocked = false;
                     paused = false;
-                    toolchange = false;
+                    m0 = false;
                     break;
                 case 'smoothie':
                     machineSend('$X\n'); //M999
                     writeLog('Sent: $X', 2);
                     blocked = false;
                     paused = false;
-                    toolchange = false;
+                    m0 = false;
                     break;
                 case 'tinyg':
                     machineSend('%'); // flush tinyg quere
@@ -2722,7 +2717,7 @@ io.sockets.on('connection', function (appSocket) {
                     //writeLog('Sent: ~', 2);
                     blocked = false;
                     paused = false;
-                    toolchange = false;
+                    m0 = false;
                     break;
                 case 'repetier':
                 case 'marlinkimbra':
@@ -2730,7 +2725,7 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog('Sent: M112', 2);
                     blocked = false;
                     paused = false;
-                    toolchange = false;
+                    m0 = false;
                     break;
                 }
                 break;
@@ -2907,8 +2902,8 @@ function send1Q() {
                         if (gcode == 'M0') {
                             //stop execution for tool change
                             paused = true;
-                            toolchange = true;
-                            io.sockets.emit('runStatus', 'toolchange');
+                            m0 = true;
+                            io.sockets.emit('runStatus', 'm0');
                             writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + (queueLen - queuePointer) + ' Bspace: ' + (spaceLeft - gcodeLen - 1), 2);
                         } else {
                             machineSend(gcode + '\n');
@@ -2949,8 +2944,8 @@ function send1Q() {
                     if (gcode == 'M0') {
                         //stop execution for tool change
                         paused = true;
-                        toolchange = true;
-                        io.sockets.emit('runStatus', 'toolchange');
+                        m0 = true;
+                        io.sockets.emit('runStatus', 'm0');
                         writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + gcodeQueue.length, 2);
                     } else {
                         blocked = true;
@@ -2966,8 +2961,8 @@ function send1Q() {
                 if (gcode == 'M0') {
                     //stop execution for tool change
                     paused = true;
-                    toolchange = true;
-                    io.sockets.emit('runStatus', 'toolchange');
+                    m0 = true;
+                    io.sockets.emit('runStatus', 'm0');
                     writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + gcodeQueue.length, 2);
                 } else {
                     machineSend(gcode + '\n');
@@ -2983,8 +2978,8 @@ function send1Q() {
                 if (gcode == 'M0') {
                     //stop execution for tool change
                     paused = true;
-                    toolchange = true;
-                    io.sockets.emit('runStatus', 'toolchange');
+                    m0 = true;
+                    io.sockets.emit('runStatus', 'm0');
                     writeLog(chalk.red('Pausing for tool change!') + ' Q: ' + gcodeQueue.length, 2);
                 } else {
                     machineSend(gcode + '\n');
