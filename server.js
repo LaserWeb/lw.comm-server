@@ -1925,75 +1925,70 @@ io.sockets.on('connection', function (appSocket) {
     appSocket.on('setZero', function (data) {
         writeLog(chalk.red('setZero(' + data + ')'), 1);
         if (isConnected) {
-            if (!m0) {
-                switch (data) {
-                case 'x':
+            switch (data) {
+            case 'x':
+                if (!m0) {
+                    addQ('G10 L20 P0 X0');
+                } else {
+                    io.sockets.emit('error', 'setZero(x) not allowed during M0 pause!');
+                }
+                break;
+            case 'y':
+                if (!m0) {
+                    addQ('G10 L20 P0 Y0');
+                } else {
+                    io.sockets.emit('error', 'setZero(y) not allowed during M0 pause!');
+                }
+                break;
+            case 'z':
+                if (m0) {
+                    machineSend('G10 L20 P0 Z0\n');
+                    writeLog('Sent: G10 L20 P0 Z0', 2);
+                } else {
+                    addQ('G10 L20 P0 Z0');
+                }
+                break;
+            case 'a':
+                if (!m0) {
+                    addQ('G10 L20 P0 A0');
+                } else {
+                    io.sockets.emit('error', 'setZero(a) not allowed during M0 pause!');
+                }
+                break;
+            case 'all':
+                switch (firmware) {
+                case 'repetier':
                     if (!m0) {
-                        addQ('G10 L20 P0 X0');
+                        addQ('G92');
                     } else {
-                        appSocket.emit('error', 'setZero(x) not allowed during M0 pause!');
+                        io.sockets.emit('error', 'setZero(all) not allowed during M0 pause!');
                     }
                     break;
-                case 'y':
+                case 'marlinkimbra':
                     if (!m0) {
-                        addQ('G10 L20 P0 Y0');
+                        addQ('G92 X0 Y0 Z0');
                     } else {
-                        appSocket.emit('error', 'setZero(y) not allowed during M0 pause!');
+                        io.sockets.emit('error', 'setZero(all) not allowed during M0 pause!');
                     }
                     break;
-                case 'z':
-                    if (m0) {
-                        machineSend('G10 L20 P0 Z0\n');
-                        writeLog('Sent: G10 L20 P0 Z0', 2);
-                    } else {
-                        addQ('G10 L20 P0 Z0');
-                    }
-                    break;
-                case 'a':
+                default:
                     if (!m0) {
-                        addQ('G10 L20 P0 A0');
+                        addQ('G10 L20 P0 X0 Y0 Z0');
                     } else {
-                        appSocket.emit('error', 'setZero(a) not allowed during M0 pause!');
-                    }
-                    break;
-                case 'all':
-                    switch (firmware) {
-                    case 'repetier':
-                        if (!m0) {
-                            addQ('G92');
-                        } else {
-                            appSocket.emit('error', 'setZero(all) not allowed during M0 pause!');
-                        }
-                        break;
-                    case 'marlinkimbra':
-                        if (!m0) {
-                            addQ('G92 X0 Y0 Z0');
-                        } else {
-                            appSocket.emit('error', 'setZero(all) not allowed during M0 pause!');
-                        }
-                        break;
-                    default:
-                        if (!m0) {
-                            addQ('G10 L20 P0 X0 Y0 Z0');
-                        } else {
-                            appSocket.emit('error', 'setZero(all) not allowed during M0 pause!');
-                        }
-                        break;
-                    }
-                    break;
-                case 'xyza':
-                    if (!m0) {
-                        addQ('G10 L20 P0 X0 Y0 Z0 A0');
-                    } else {
-                        appSocket.emit('error', 'setZero(xyza) not allowed during M0 pause!');
+                        io.sockets.emit('error', 'setZero(all) not allowed during M0 pause!');
                     }
                     break;
                 }
-                send1Q();
-            } else {
-                io.sockets.emit('error', 'setZero not allowed during M0 pause!');
-                writeLog(chalk.red('ERROR: ') + chalk.blue('setZero not allowed during M0 pause!'), 1);
+                break;
+            case 'xyza':
+                if (!m0) {
+                    addQ('G10 L20 P0 X0 Y0 Z0 A0');
+                } else {
+                    io.sockets.emit('error', 'setZero(xyza) not allowed during M0 pause!');
+                }
+                break;
             }
+            send1Q();
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -2764,13 +2759,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('Reset Machine'), 1);
             switch (firmware) {
             case 'grbl':
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
-                break;
             case 'smoothie':
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
-                break;
             case 'tinyg':
                 machineSend(String.fromCharCode(0x18)); // ctrl-x
                 writeLog('Sent: Code(0x18)', 2);
@@ -2920,7 +2909,7 @@ function send1Q() {
                     if (gcodeLen < spaceLeft) {
                         gcode = gcodeQueue[queuePointer];
                         queuePointer++;
-                        if (gcode == 'M0') {
+                        if (gcode.indexOf('M0') == 0) {
                             //stop execution for tool change
                             paused = true;
                             m0 = true;
@@ -2962,7 +2951,7 @@ function send1Q() {
                 if ((gcodeQueue.length  - queuePointer) > 0 && !blocked && !paused) {
                     gcode = gcodeQueue[queuePointer];
                     queuePointer++;
-                    if (gcode == 'M0') {
+                    if (gcode.indexOf('M0') == 0) {
                         //stop execution for tool change
                         paused = true;
                         m0 = true;
@@ -2979,7 +2968,7 @@ function send1Q() {
         case 'tinyg':
             while (tinygBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
                 gcode = gcodeQueue.shift();
-                if (gcode == 'M0') {
+                if (gcode.indexOf('M0') == 0) {
                     //stop execution for tool change
                     paused = true;
                     m0 = true;
@@ -2996,7 +2985,7 @@ function send1Q() {
         case 'marlinkimbra':
             while (reprapBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
                 gcode = gcodeQueue.shift();
-                if (gcode == 'M0') {
+                if (gcode.indexOf('M0') == 0) {
                     //stop execution for tool change
                     paused = true;
                     m0 = true;
