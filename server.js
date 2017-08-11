@@ -38,6 +38,7 @@ const nstatic = require('node-static');
 const url = require('url');
 const util = require('util');
 const chalk = require('chalk');
+const moment = require('moment');
 const request = require('request'); // proxy for remote webcams
 const grblStrings = require('./grblStrings.js');
 const firmwareFeatures = require('./firmwareFeatures.js');
@@ -1701,9 +1702,18 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('runJob', function (data) {
-        writeLog('Run Job (' + data.length + ')', 1);
+        writeLog(chalk.red('Run Job (' + data.length + ')'), 1);
         if (isConnected) {
             if (data) {
+                if (config.jobHistory) {
+                    var filename = './history/' + moment().format('YYYY-MM-DD_hh-mm-ss');;
+                    var jobFile = fs.createWriteStream(filename + '.gcode');
+                    jobFile.write(data);
+                    jobFile.close;
+                    writeLog('Job-File written to ' + filename, 1);
+                } else {
+                    writeLog('Job-History is false', 1);
+                }
                 runningJob = data;
                 data = data.split('\n');
                 for (var i = 0; i < data.length; i++) {
