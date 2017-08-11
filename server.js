@@ -272,6 +272,12 @@ io.sockets.on('connection', function (appSocket) {
         appSocket.emit('featureList', firmwareFeatures.get(firmware));
     });
 
+    appSocket.on('getJobHistory', function () { // Deliver config of server (incl. versions)
+        writeLog(chalk.yellow('INFO: ') + chalk.blue('Requesting Job History '), 1);
+        var files = fs.readdirSync('./history');
+        appSocket.emit('jobHistory', jobs);
+    });
+
     appSocket.on('getRunningJob', function (data) { // Deliver running Job to Web-Client
         appSocket.emit('runningJob', runningJob);
     });
