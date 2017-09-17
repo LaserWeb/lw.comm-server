@@ -31,6 +31,7 @@ var SerialPort = serialport;
 const websockets = require('socket.io');
 const http = require('http');
 const WebSocket = require('ws');
+const HID = require("node-hid");
 const net = require('net');
 const os = require('os');
 const fs = require('fs');
@@ -91,6 +92,13 @@ var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
 
+var vendorId = 4302;    // for MPG: XHC HB04-L
+var productId = 60272;  // for MPG: XHC HB04-L
+//var dev = new HID.HID('USB_10ce_eb70_14100000');
+var mpgType = config.mpgType;
+var mpg;
+var macro = [];
+
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
@@ -142,6 +150,17 @@ var app = http.createServer(function (req, res) {
 });
 app.listen(config.webPort);
 var io = websockets.listen(app);
+
+
+// MPG communication
+if (mpgType == 1){
+    mpg = new HID.HID(vendorId, productId);
+
+    mpg.on("data", function (data) {
+        //writeLog(chalk.yellow('MPG: ' + JSON.stringify(data)), 1);
+        parseMPGPacket(data);
+    });
+}
 
 
 // WebSocket connection from frontend
@@ -1701,926 +1720,71 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('runJob', function (data) {
-        writeLog('Run Job (' + data.length + ')', 1);
-        if (isConnected) {
-            if (data) {
-                runningJob = data;
-                data = data.split('\n');
-                for (var i = 0; i < data.length; i++) {
-                    var line = data[i].split(';'); // Remove everything after ; = comment
-                    var tosend = line[0].trim();
-                    if (tosend.length > 0) {
-                        if (optimizeGcode) {
-                            var newMode;
-                            if (tosend.indexOf('G0') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G0';
-                            } else if (tosend.indexOf('G1') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G1';
-                            } else if (tosend.indexOf('G2') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G2';
-                            } else if (tosend.indexOf('G3') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G3';
-                            } else if (tosend.indexOf('X') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            } else if (tosend.indexOf('Y') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            } else if (tosend.indexOf('Z') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            } else if (tosend.indexOf('A') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            }
-                            if (newMode) {
-                                if (newMode === lastMode) {
-                                    tosend.substr(2);
-                                } else {
-                                    lastMode = newMode;
-                                }
-                            }
-                        }
-                        //console.log(line);
-                        addQ(tosend);
-                    }
-                }
-                if (i > 0) {
-                    startTime = new Date(Date.now());
-                    // Start interval for qCount messages to socket clients
-                    queueCounter = setInterval(function () {
-                        io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
-                    }, 500);
-                    io.sockets.emit('runStatus', 'running');
-                    send1Q();
-                }
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        runJob(data);
     });
 
     appSocket.on('runCommand', function (data) {
-        writeLog(chalk.red('Run Command (' + data.replace('\n', '|') + ')'), 1);
-        if (isConnected) {
-            if (data) {
-                data = data.split('\n');
-                for (var i = 0; i < data.length; i++) {
-                    var line = data[i].split(';'); // Remove everything after ; = comment
-                    var tosend = line[0].trim();
-                    if (tosend.length > 0) {
-                        addQ(tosend);
-                    }
-                }
-                if (i > 0) {
-                    //io.sockets.emit('runStatus', 'running');
-                    send1Q();
-                }
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        runCommand(data);
     });
 
     appSocket.on('jog', function (data) {
-        writeLog(chalk.red('Jog ' + data), 1);
-        if (isConnected) {
-            data = data.split(',');
-            var dir = data[0];
-            var dist = parseFloat(data[1]);
-            var feed;
-            if (data.length > 2) {
-                feed = parseInt(data[2]);
-                if (feed) {
-                    feed = 'F' + feed;   
-                }
-            }
-            if (dir && dist && feed) {
-                writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
-                switch (firmware) {
-                case 'grbl':
-                    addQ('$J=G91' + dir + dist + feed);
-                    send1Q();
-                    break;
-                case 'smoothie':
-                    addQ('G91');
-                    addQ('G0' + feed + dir + dist);
-                    addQ('G90');
-                    send1Q();
-                    break;
-                case 'tinyg':
-                    addQ('G91');
-                    addQ('G0' + feed + dir + dist);
-                    addQ('G90');
-                    send1Q();
-                    break;
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G91');
-                    addQ('G0' + feed + dir + dist);
-                    addQ('G90');
-                    send1Q();
-                    break;
-                default:
-                    writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
-                    break;
-                }
-            } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);    
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        jog(data);
     });
 
     appSocket.on('jogTo', function (data) {     // data = {x:xVal, y:yVal, z:zVal, mode:0(absulute)|1(relative), feed:fVal}
-        writeLog(chalk.red('JogTo ' + JSON.stringify(data)), 1);
-        if (isConnected) {
-            if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
-                var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) : '');
-                var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) : '');
-                var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) : '');
-                var mode = ((data.mode == 0) ? 0 : 1);
-                var feed = (data.feed !== undefined ? 'F' + parseInt(data.feed) : '');
-                writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
-                switch (firmware) {
-                case 'grbl':
-                    addQ('$J=G9' + mode + xVal + yVal + zVal + feed);
-                    send1Q();
-                    break;
-                case 'smoothie':
-                    addQ('G9' + mode);
-                    addQ('G0' + feed + xVal + yVal + zVal);
-                    addQ('G90');
-                    send1Q();
-                    break;
-                case 'tinyg':
-                    addQ('G9' + mode);
-                    addQ('G0' + feed + xVal + yVal + zVal);
-                    addQ('G90');
-                    send1Q();
-                    break;
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G9' + mode);
-                    addQ('G0' + feed + xVal + yVal + zVal);
-                    addQ('G90');
-                    send1Q();
-                    break;
-                default:
-                    writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
-                    break;
-                }
-            } else {
-                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);    
-                io.sockets.emit('data', 'Invalid jogTo() params!');
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        jogTo(data);
     });
 
     appSocket.on('setZero', function (data) {
-        writeLog(chalk.red('setZero(' + data + ')'), 1);
-        if (isConnected) {
-            switch (data) {
-            case 'x':
-                addQ('G10 L20 P0 X0');
-                break;
-            case 'y':
-                addQ('G10 L20 P0 Y0');
-                break;
-            case 'z':
-                addQ('G10 L20 P0 Z0');
-                break;
-            case 'a':
-                addQ('G10 L20 P0 A0');
-                break;
-            case 'all':
-                switch (firmware) {
-                case 'repetier':
-                    addQ('G92');
-                    break;
-                case 'marlinkimbra':
-                    addQ('G92 X0 Y0 Z0');
-                    break;
-                default:
-                    addQ('G10 L20 P0 X0 Y0 Z0');
-                    break;
-                }
-                break;
-            case 'xyza':
-                addQ('G10 L20 P0 X0 Y0 Z0 A0');
-                break;
-            }
-            send1Q();
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        setZero(data);
     });
 
     appSocket.on('gotoZero', function (data) {
-        writeLog(chalk.red('gotoZero(' + data + ')'), 1);
-        if (isConnected) {
-            switch (data) {
-            case 'x':
-                addQ('G0 X0');
-                break;
-            case 'y':
-                addQ('G0 Y0');
-                break;
-            case 'z':
-                addQ('G0 Z0');
-                break;
-            case 'a':
-                addQ('G0 A0');
-                break;
-            case 'all':
-                addQ('G0 X0 Y0 Z0');
-                break;
-            case 'xyza':
-                addQ('G0 X0 Y0 Z0 A0');
-                break;
-            }
-            send1Q();
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        gotoZero(data);
     });
 
     appSocket.on('setPosition', function (data) {
-        writeLog(chalk.red('setPosition(' + JSON.stringify(data) + ')'), 1);
-        if (isConnected) {
-            if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
-                var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) + ' ' : '');
-                var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) + ' ' : '');
-                var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) + ' ' : '');
-                var aVal = (data.a !== undefined ? 'A' + parseFloat(data.a) + ' ' : '');
-                addQ('G10 L20 P0 ' + xVal + yVal + zVal + aVal);
-                send1Q();
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        setPosition(data);
     });
 
     appSocket.on('home', function (data) {
-        writeLog(chalk.red('home(' + data + ')'), 1);
-        if (isConnected) {
-            switch (data) {
-            case 'x':
-                switch (firmware) {
-                case 'smoothie':
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G28.2 X');
-                    break;
-                default:
-                    //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
-                    break;
-                }
-                break;
-            case 'y':
-                switch (firmware) {
-                case 'smoothie':
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G28.2 Y');
-                    break;
-                default:
-                    //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
-                    break;
-                }
-                break;
-            case 'z':
-                switch (firmware) {
-                case 'smoothie':
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G28.2 Z');
-                    break;
-                default:
-                    //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
-                    break;
-                }
-                break;
-            case 'a':
-                switch (firmware) {
-                case 'smoothie':
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G28.2 E1');
-                    break;
-                default:
-                    //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
-                    break;
-                }
-                break;
-            case 'all': // XYZ only!!
-                switch (firmware) {
-                case 'grbl':
-                    addQ('$H');
-                    break;
-                case 'smoothie':
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G28.2 X Y Z');
-                    break;
-                default:
-                    //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
-                    break;
-                }
-                break;
-            case 'xyza':
-                switch (firmware) {
-                case 'grbl':
-                    addQ('$H');
-                    break;
-                case 'smoothie':
-                case 'repetier':
-                case 'marlinkimbra':
-                    addQ('G28.2 X Y Z E');
-                    break;
-                default:
-                    //not supported
-                    appSocket.emit('error', 'Command not supported by firmware!');
-                    break;
-                }
-                break;
-            }
-            send1Q();
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        home(data);
     });
 
     appSocket.on('probe', function (data) {
-        writeLog(chalk.red('probe(' + JSON.stringify(data) + ')'), 1);
-        if (isConnected) {
-            switch (firmware) {
-            case 'smoothie':
-                switch (data.direction) {
-                case 'z':
-                    addQ('G30 Z' + data.probeOffset);
-                    break;
-                default:
-                    addQ('G38.2 ' + data.direction);
-                    break;
-                }
-            case 'grbl':
-                addQ('G38.2 ' + data.direction + '-5 F1');
-                addQ('G92 ' + data.direction + ' ' + data.probeOffset);
-                break;
-            case 'repetier':
-            case 'marlinkimbra':
-                addQ('G38.2 ' + data.direction + '-5 F1');
-                break;
-            default:
-                //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
-                break;
-            }
-            send1Q();
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        probe(data);
     });
     
     appSocket.on('feedOverride', function (data) {
-        if (isConnected) {
-            switch (firmware) {
-            case 'grbl':
-                var code;
-                switch (data) {
-                case 0:
-                    code = 144; // set to 100%
-                    data = '100';
-                    break;
-                case 10:
-                    code = 145; // +10%
-                    data = '+' + data;
-                    break;
-                case -10:
-                    code = 146; // -10%
-                    break;
-                case 1:
-                    code = 147; // +1%
-                    data = '+' + data;
-                    break;
-                case -1:
-                    code = 148; // -1%
-                    break;
-                }
-                if (code) {
-                    //jumpQ(String.fromCharCode(parseInt(code)));
-                    machineSend(String.fromCharCode(parseInt(code)));
-                    writeLog('Sent: Code(' + code + ')', 2);
-                    writeLog(chalk.red('Feed Override ' + data + '%'), 1);
-                }
-                break;
-            case 'smoothie':
-                if (data === 0) {
-                    feedOverride = 100;
-                } else {
-                    if ((feedOverride + data <= 200) && (feedOverride + data >= 10)) {
-                        // valid range is 10..200, else ignore!
-                        feedOverride += data;
-                    }
-                }
-                //jumpQ('M220S' + feedOverride);
-                machineSend('M220S' + feedOverride + '\n');
-                writeLog('Sent: M220S' + feedOverride, 2);
-                io.sockets.emit('feedOverride', feedOverride);
-                writeLog(chalk.red('Feed Override ' + feedOverride.toString() + '%'), 1);
-                //send1Q();
-                break;
-            case 'tinyg':
-                break;
-            case 'repetier':
-            case 'marlinkimbra':
-                if (data === 0) {
-                    feedOverride = 100;
-                } else {
-                    if ((feedOverride + data <= 200) && (feedOverride + data >= 10)) {
-                        // valid range is 10..200, else ignore!
-                        feedOverride += data;
-                    }
-                }
-                machineSend('M220 S' + feedOverride + '\n');
-                reprapBufferSize--;
-                writeLog('Sent: M220 S' + feedOverride, 2);
-                io.sockets.emit('feedOverride', feedOverride);
-                writeLog(chalk.red('Feed Override ' + feedOverride.toString() + '%'), 1);
-                break;
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        feedOverride(data);
     });
 
     appSocket.on('spindleOverride', function (data) {
-        if (isConnected) {
-            switch (firmware) {
-            case 'grbl':
-                var code;
-                switch (data) {
-                case 0:
-                    code = 153; // set to 100%
-                    data = '100';
-                    break;
-                case 10:
-                    code = 154; // +10%
-                    data = '+' + data;
-                    break;
-                case -10:
-                    code = 155; // -10%
-                    break;
-                case 1:
-                    code = 156; // +1%
-                    data = '+' + data;
-                    break;
-                case -1:
-                    code = 157; // -1%
-                    break;
-                }
-                if (code) {
-                    //jumpQ(String.fromCharCode(parseInt(code)));
-                    machineSend(String.fromCharCode(parseInt(code)));
-                    writeLog('Sent: Code(' + code + ')', 2);
-                    writeLog(chalk.red('Spindle (Laser) Override ' + data + '%'), 1);
-                }
-                break;
-            case 'smoothie':
-                if (data === 0) {
-                    spindleOverride = 100;
-                } else {
-                    if ((spindleOverride + data <= 200) && (spindleOverride + data >= 0)) {
-                        // valid range is 0..200, else ignore!
-                        spindleOverride += data;
-                    }
-                }
-                //jumpQ('M221S' + spindleOverride);
-                machineSend('M221S' + spindleOverride + '\n');
-                writeLog('Sent: M221S' + spindleOverride, 2);
-                io.sockets.emit('spindleOverride', spindleOverride);
-                writeLog(chalk.red('Spindle (Laser) Override ' + spindleOverride.toString() + '%'), 1);
-                //send1Q();
-                break;
-            case 'tinyg':
-                break;
-            case 'repetier':
-            case 'marlinkimbra':
-                if (data === 0) {
-                    spindleOverride = 100;
-                } else {
-                    if ((spindleOverride + data <= 200) && (spindleOverride + data >= 0)) {
-                        // valid range is 0..200, else ignore!
-                        spindleOverride += data;
-                    }
-                }
-                machineSend('M221 S' + spindleOverride + '\n');
-                reprapBufferSize--;
-                writeLog('Sent: M221 S' + spindleOverride, 2);
-                io.sockets.emit('spindleOverride', spindleOverride);
-                writeLog(chalk.red('Spindle (Laser) Override ' + spindleOverride.toString() + '%'), 1);
-                break;
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        spindleOverride(data);
     });
 
     appSocket.on('laserTest', function (data) { // Laser Test Fire
-        if (isConnected) {
-            data = data.split(',');
-            var power = parseFloat(data[0]);
-            var duration = parseInt(data[1]);
-            var maxS = parseFloat(data[2]);
-            if (power > 0) {
-                if (!laserTestOn) {
-                    // laserTest is off
-                    writeLog('laserTest: ' + 'Power ' + power + ', Duration ' + duration + ', maxS ' + maxS, 1);
-                    if (duration >= 0) {
-                        switch (firmware) {
-                        case 'grbl':
-                            addQ('G1F1');
-                            addQ('M3S' + parseInt(power * maxS / 100));
-                            laserTestOn = true;
-                            appSocket.emit('laserTest', power);
-                            if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
-                                addQ('M5S0');
-                                laserTestOn = false;
-                                //appSocket.emit('laserTest', 0); //-> Grbl get the real state with status report
-                            }
-                            send1Q();
-                            break;
-                        case 'smoothie':
-                            addQ('M3\n');
-                            addQ('fire ' + power + '\n');
-                            laserTestOn = true;
-                            appSocket.emit('laserTest', power);
-                            if (duration > 0) {
-                                var divider = 1;
-                                if (fDate >= new Date('2017-01-02')) {
-                                    divider = 1000;
-                                }
-                                addQ('G4P' + duration / divider + '\n');
-                                addQ('fire off\n');
-                                addQ('M5');
-                                setTimeout(function () {
-                                    laserTestOn = false;
-                                    appSocket.emit('laserTest', 0);
-                                }, duration );
-                            }
-                            send1Q();
-                            break;
-                        case 'tinyg':
-                            addQ('G1F1');
-                            addQ('M3S' + parseInt(power * maxS / 100));
-                            laserTestOn = true;
-                            appSocket.emit('laserTest', power);
-                            if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
-                                addQ('M5S0');
-                                laserTestOn = false;
-                                setTimeout(function () {
-                                    laserTestOn = false;
-                                    appSocket.emit('laserTest', 0);
-                                }, duration );
-                            }
-                            send1Q();
-                            break;
-                        case 'repetier':
-                        case 'marlinkimbra':
-                            addQ('G1F1');
-                            addQ('M3 S' + parseInt(power * maxS / 100));
-                            addQ('M4');
-                            laserTestOn = true;
-                            appSocket.emit('laserTest', power);
-                            if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
-                                addQ('M5');
-                                laserTestOn = false;
-                                setTimeout(function () {
-                                    laserTestOn = false;
-                                    appSocket.emit('laserTest', 0);
-                                }, duration );
-                            }
-                            send1Q();
-                            break;
-                        }
-                    }
-                } else {
-                    writeLog('laserTest: ' + 'Power off', 1);
-                    switch (firmware) {
-                    case 'grbl':
-                        addQ('M5S0');
-                        send1Q();
-                        break;
-                    case 'smoothie':
-                        addQ('fire off\n');
-                        addQ('M5\n');
-                        send1Q();
-                        break;
-                    case 'tinyg':
-                        addQ('M5S0');
-                        send1Q();
-                        break;
-                    case 'repetier':
-                    case 'marlinkimbra':
-                        addQ('M5');
-                        send1Q();
-                        break;
-                    }
-                    laserTestOn = false;
-                    appSocket.emit('laserTest', 0);
-                }
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        laserTest(data);
     });
 
     appSocket.on('pause', function () {
-        if (isConnected) {
-            paused = true;
-            writeLog(chalk.red('PAUSE'), 1);
-            switch (firmware) {
-            case 'grbl':
-                machineSend('!'); // Send hold command
-                writeLog('Sent: !', 2);
-                if (fVersion === '1.1d') {
-                    machineSend(String.fromCharCode(0x9E)); // Stop Spindle/Laser
-                    writeLog('Sent: Code(0x9E)', 2);
-                }
-                break;
-            case 'smoothie':
-                machineSend('!'); // Laser will be turned off by smoothie (in default config!)
-                //machineSend('M600\n'); // Laser will be turned off by smoothie (in default config!)
-                writeLog('Sent: !', 2);
-                break;
-            case 'tinyg':
-                machineSend('!'); // Send hold command
-                writeLog('Sent: !', 2);
-                break;
-            case 'repetier':
-            case 'marlinkimbra':
-                // just stop sending gcodes
-                break;
-            }
-            io.sockets.emit('runStatus', 'paused');
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        pauseMachine();
     });
 
     appSocket.on('resume', function () {
-        if (isConnected) {
-            writeLog(chalk.red('UNPAUSE'), 1);
-            //io.sockets.emit('connectStatus', 'unpaused:' + port.path);
-            switch (firmware) {
-            case 'grbl':
-                machineSend('~'); // Send resume command
-                writeLog('Sent: ~', 2);
-                break;
-            case 'smoothie':
-                machineSend('~'); // Send resume command
-                //machineSend('M601\n');
-                writeLog('Sent: ~', 2);
-                break;
-            case 'tinyg':
-                machineSend('~'); // Send resume command
-                writeLog('Sent: ~', 2);
-                break;
-            case 'repetier':
-            case 'marlinkimbra':
-                break;
-            }
-            paused = false;
-            send1Q(); // restart queue
-            io.sockets.emit('runStatus', 'resumed');
-//            switch (connectionType) {
-//            case 'usb':
-//                io.sockets.emit("connectStatus", 'opened:' + port.path);
-//                break;
-//            case 'telnet':
-//                io.sockets.emit("connectStatus", 'opened:' + connectedIp);
-//                break;
-//            case 'esp8266':
-//                io.sockets.emit("connectStatus", 'opened:' + connectedIp);
-//                break;
-//            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        resumeMachine();
     });
 
     appSocket.on('stop', function () {
-        if (isConnected) {
-            paused = true;
-            writeLog(chalk.red('STOP'), 1);
-            switch (firmware) {
-            case 'grbl':
-                machineSend('!'); // hold
-                writeLog('Sent: !', 2);
-                if (fVersion === '1.1d') {
-                    machineSend(String.fromCharCode(0x9E)); // Stop Spindle/Laser
-                    writeLog('Sent: Code(0x9E)', 2);
-                }
-                writeLog('Cleaning Queue', 1);
-                gcodeQueue.length = 0; // Dump the Queye
-                grblBufferSize.length = 0; // Dump bufferSizes
-                queueLen = 0;
-                queuePointer = 0;
-                queuePos = 0;
-                startTime = null;
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
-                blocked = false;
-                paused = false;
-                break;
-            case 'smoothie':
-                paused = true;
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
-                break;
-            case 'tinyg':
-                paused = true;
-                machineSend('!'); // hold
-                writeLog('Sent: !', 2);
-                machineSend('%'); // dump TinyG queue
-                writeLog('Sent: %', 2);
-                break;
-            case 'repetier':
-            case 'marlinkimbra':
-                paused = true;
-                machineSend('M112/n'); // hold
-                writeLog('Sent: M112', 2);
-                break;
-            }
-            clearInterval(queueCounter);
-            io.sockets.emit('qCount', 0);
-            gcodeQueue.length = 0; // Dump the Queye
-            grblBufferSize.length = 0; // Dump bufferSizes
-            tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
-            reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
-            reprapWaitForPos = false;
-            queueLen = 0;
-            queuePointer = 0;
-            queuePos = 0;
-            laserTestOn = false;
-            startTime = null;
-            runningJob = null;
-            blocked = false;
-            paused = false;
-            io.sockets.emit('runStatus', 'stopped');
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        stopMachine();
     });
 
     appSocket.on('clearAlarm', function (data) { // Clear Alarm
-        if (isConnected) {
-            data = parseInt(data);
-            writeLog('Clearing Queue: Method ' + data, 1);
-            switch (data) {
-            case 1:
-                writeLog('Clearing Lockout');
-                switch (firmware) {
-                case 'grbl':
-                    machineSend('$X\n');
-                    writeLog('Sent: $X', 2);
-                    break;
-                case 'smoothie':
-                    machineSend('$X\n');
-                    writeLog('Sent: $X', 2);
-                    break;
-                case 'tinyg':
-                    machineSend('$X\n');
-                    writeLog('Sent: $X', 2);
-                    break;
-                case 'repetier':
-                case 'marlinkimbra':
-                    machineSend('M112\n');
-                    writeLog('Sent: M112', 2);
-                    break;
-                }
-                writeLog('Resuming Queue Lockout', 1);
-                break;
-            case 2:
-                writeLog('Emptying Queue', 1);
-                gcodeQueue.length = 0; // Dump the Queye
-                grblBufferSize.length = 0; // Dump bufferSizes
-                tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
-                reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
-                reprapWaitForPos = false;
-                queueLen = 0;
-                queuePointer = 0;
-                queuePos = 0;
-                startTime = null;
-                writeLog('Clearing Lockout', 1);
-                switch (firmware) {
-                case 'grbl':
-                    machineSend('$X\n');
-                    writeLog('Sent: $X', 2);
-                    blocked = false;
-                    paused = false;
-                    break;
-                case 'smoothie':
-                    machineSend('$X\n'); //M999
-                    writeLog('Sent: $X', 2);
-                    blocked = false;
-                    paused = false;
-                    break;
-                case 'tinyg':
-                    machineSend('%'); // flush tinyg quere
-                    writeLog('Sent: %', 2);
-                    //machineSend('~'); // resume
-                    //writeLog('Sent: ~', 2);
-                    blocked = false;
-                    paused = false;
-                    break;
-                case 'repetier':
-                case 'marlinkimbra':
-                    machineSend('M112/b');
-                    writeLog('Sent: M112', 2);
-                    blocked = false;
-                    paused = false;
-                    break;
-                }
-                break;
-            }
-            io.sockets.emit('runStatus', 'stopped');
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        clearAlarm(data);
     });
     
     appSocket.on('resetMachine', function () {
-        if (isConnected) {
-            writeLog(chalk.red('Reset Machine'), 1);
-            switch (firmware) {
-            case 'grbl':
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
-                break;
-            case 'smoothie':
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
-                break;
-            case 'tinyg':
-                machineSend(String.fromCharCode(0x18)); // ctrl-x
-                writeLog('Sent: Code(0x18)', 2);
-                break;
-            case 'repetier':
-            case 'marlinkimbra':
-                machineSend('M112/n');
-                writeLog('Sent: M112', 2);
-                break;
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
+        resetMachine();
     });
     
     appSocket.on('closePort', function (data) { // Close machine port and dump queue
@@ -2680,6 +1844,959 @@ io.sockets.on('connection', function (appSocket) {
     });    
 
 }); // End appSocket
+
+
+function runJob(data) {
+    writeLog('Run Job (' + data.length + ')', 1);
+    if (isConnected) {
+        if (data) {
+            runningJob = data;
+            data = data.split('\n');
+            for (var i = 0; i < data.length; i++) {
+                var line = data[i].split(';'); // Remove everything after ; = comment
+                var tosend = line[0].trim();
+                if (tosend.length > 0) {
+                    if (optimizeGcode) {
+                        var newMode;
+                        if (tosend.indexOf('G0') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                            newMode = 'G0';
+                        } else if (tosend.indexOf('G1') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                            newMode = 'G1';
+                        } else if (tosend.indexOf('G2') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                            newMode = 'G2';
+                        } else if (tosend.indexOf('G3') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                            newMode = 'G3';
+                        } else if (tosend.indexOf('X') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                        } else if (tosend.indexOf('Y') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                        } else if (tosend.indexOf('Z') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                        } else if (tosend.indexOf('A') === 0) {
+                            tosend = tosend.replace(/\s+/g, '');
+                        }
+                        if (newMode) {
+                            if (newMode === lastMode) {
+                                tosend.substr(2);
+                            } else {
+                                lastMode = newMode;
+                            }
+                        }
+                    }
+                    //console.log(line);
+                    addQ(tosend);
+                }
+            }
+            if (i > 0) {
+                startTime = new Date(Date.now());
+                // Start interval for qCount messages to socket clients
+                queueCounter = setInterval(function () {
+                    io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
+                }, 500);
+                io.sockets.emit('runStatus', 'running');
+                send1Q();
+            }
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function runMacro(data) {
+    writeLog(chalk.red('Run Macro (' + data + ')'), 1);
+    if (isConnected) {
+        if (macro[data]) {
+            data = macro[data].split('\n');
+            for (var i = 0; i < data.length; i++) {
+                var line = data[i].split(';'); // Remove everything after ; = comment
+                var tosend = line[0].trim();
+                if (tosend.length > 0) {
+                    addQ(tosend);
+                }
+            }
+            if (i > 0) {
+                //io.sockets.emit('runStatus', 'running');
+                send1Q();
+            }
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function runCommand(data) {
+    writeLog(chalk.red('Run Command (' + data.replace('\n', '|') + ')'), 1);
+    if (isConnected) {
+        if (data) {
+            data = data.split('\n');
+            for (var i = 0; i < data.length; i++) {
+                var line = data[i].split(';'); // Remove everything after ; = comment
+                var tosend = line[0].trim();
+                if (tosend.length > 0) {
+                    addQ(tosend);
+                }
+            }
+            if (i > 0) {
+                //io.sockets.emit('runStatus', 'running');
+                send1Q();
+            }
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function jog(data) {
+    // data: direction, distance, feed
+    if (!Array.isArray(data)) {
+        data = data.split(',');
+    }
+    var dir = data[0];
+    var dist = parseFloat(data[1]);
+    var feed = '';
+    if (data.length > 2) {
+        feed = parseInt(data[2]);
+        if (feed) {
+            feed = 'F' + feed;   
+        }
+    }
+    writeLog(chalk.red('Jog ' + JSON.stringify(data)), 1);
+    if (isConnected) {
+        if (dir && dist && feed) {
+            writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
+            switch (firmware) {
+            case 'grbl':
+                addQ('$J=G91' + dir + dist + feed);
+                send1Q();
+                break;
+            case 'smoothie':
+                addQ('G91');
+                addQ('G0' + feed + dir + dist);
+                addQ('G90');
+                send1Q();
+                break;
+            case 'tinyg':
+                addQ('G91');
+                addQ('G0' + feed + dir + dist);
+                addQ('G90');
+                send1Q();
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G91');
+                addQ('G0' + feed + dir + dist);
+                addQ('G90');
+                send1Q();
+                break;
+            default:
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
+                break;
+            }
+        } else {
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);    
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function jogTo(data) {
+    writeLog(chalk.red('JogTo ' + JSON.stringify(data)), 1);
+    if (isConnected) {
+        if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
+            var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) : '');
+            var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) : '');
+            var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) : '');
+            var mode = ((data.mode == 0) ? 0 : 1);
+            var feed = (data.feed !== undefined ? 'F' + parseInt(data.feed) : '');
+            writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
+            switch (firmware) {
+            case 'grbl':
+                addQ('$J=G9' + mode + xVal + yVal + zVal + feed);
+                send1Q();
+                break;
+            case 'smoothie':
+                addQ('G9' + mode);
+                addQ('G0' + feed + xVal + yVal + zVal);
+                addQ('G90');
+                send1Q();
+                break;
+            case 'tinyg':
+                addQ('G9' + mode);
+                addQ('G0' + feed + xVal + yVal + zVal);
+                addQ('G90');
+                send1Q();
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G9' + mode);
+                addQ('G0' + feed + xVal + yVal + zVal);
+                addQ('G90');
+                send1Q();
+                break;
+            default:
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
+                break;
+            }
+        } else {
+            writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);    
+            io.sockets.emit('data', 'Invalid jogTo() params!');
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function setZero(data) {
+    writeLog(chalk.red('setZero(' + data + ')'), 1);
+    if (isConnected) {
+        switch (data) {
+        case 'x':
+            addQ('G10 L20 P0 X0');
+            break;
+        case 'y':
+            addQ('G10 L20 P0 Y0');
+            break;
+        case 'z':
+            addQ('G10 L20 P0 Z0');
+            break;
+        case 'a':
+            addQ('G10 L20 P0 A0');
+            break;
+        case 'all':
+            switch (firmware) {
+            case 'repetier':
+                addQ('G92');
+                break;
+            case 'marlinkimbra':
+                addQ('G92 X0 Y0 Z0');
+                break;
+            default:
+                addQ('G10 L20 P0 X0 Y0 Z0');
+                break;
+            }
+            break;
+        case 'xyza':
+            addQ('G10 L20 P0 X0 Y0 Z0 A0');
+            break;
+        }
+        send1Q();
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function gotoZero(data) {
+    writeLog(chalk.red('gotoZero(' + data + ')'), 1);
+    if (isConnected) {
+        switch (data) {
+        case 'x':
+            addQ('G0 X0');
+            break;
+        case 'y':
+            addQ('G0 Y0');
+            break;
+        case 'z':
+            addQ('G0 Z0');
+            break;
+        case 'a':
+            addQ('G0 A0');
+            break;
+        case 'all':
+            addQ('G0 X0 Y0 Z0');
+            break;
+        case 'xyza':
+            addQ('G0 X0 Y0 Z0 A0');
+            break;
+        }
+        send1Q();
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function setPosition(data) {
+    writeLog(chalk.red('setPosition(' + JSON.stringify(data) + ')'), 1);
+    if (isConnected) {
+        if (data.x !== undefined || data.y !== undefined || data.z !== undefined) {
+            var xVal = (data.x !== undefined ? 'X' + parseFloat(data.x) + ' ' : '');
+            var yVal = (data.y !== undefined ? 'Y' + parseFloat(data.y) + ' ' : '');
+            var zVal = (data.z !== undefined ? 'Z' + parseFloat(data.z) + ' ' : '');
+            var aVal = (data.a !== undefined ? 'A' + parseFloat(data.a) + ' ' : '');
+            addQ('G10 L20 P0 ' + xVal + yVal + zVal + aVal);
+            send1Q();
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function home(data) {
+    writeLog(chalk.red('home(' + data + ')'), 1);
+    if (isConnected) {
+        switch (data) {
+        case 'x':
+            switch (firmware) {
+            case 'smoothie':
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G28.2 X');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
+                break;
+            }
+            break;
+        case 'y':
+            switch (firmware) {
+            case 'smoothie':
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G28.2 Y');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
+                break;
+            }
+            break;
+        case 'z':
+            switch (firmware) {
+            case 'smoothie':
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G28.2 Z');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
+                break;
+            }
+            break;
+        case 'a':
+            switch (firmware) {
+            case 'smoothie':
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G28.2 E1');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
+                break;
+            }
+            break;
+        case 'all': // XYZ only!!
+            switch (firmware) {
+            case 'grbl':
+                addQ('$H');
+                break;
+            case 'smoothie':
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G28.2 X Y Z');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
+                break;
+            }
+            break;
+        case 'xyza':
+            switch (firmware) {
+            case 'grbl':
+                addQ('$H');
+                break;
+            case 'smoothie':
+            case 'repetier':
+            case 'marlinkimbra':
+                addQ('G28.2 X Y Z E');
+                break;
+            default:
+                //not supported
+                appSocket.emit('error', 'Command not supported by firmware!');
+                break;
+            }
+            break;
+        }
+        send1Q();
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function probe(data) {
+    writeLog(chalk.red('probe(' + JSON.stringify(data) + ')'), 1);
+    if (isConnected) {
+        switch (firmware) {
+        case 'smoothie':
+            switch (data.direction) {
+            case 'z':
+                addQ('G30 Z' + data.probeOffset);
+                break;
+            default:
+                addQ('G38.2 ' + data.direction);
+                break;
+            }
+        case 'grbl':
+            addQ('G38.2 ' + data.direction + '-5 F1');
+            addQ('G92 ' + data.direction + ' ' + data.probeOffset);
+            break;
+        case 'repetier':
+        case 'marlinkimbra':
+            addQ('G38.2 ' + data.direction + '-5 F1');
+            break;
+        default:
+            //not supported
+            appSocket.emit('error', 'Command not supported by firmware!');
+            break;
+        }
+        send1Q();
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function feedOverride(data) {
+    if (isConnected) {
+        switch (firmware) {
+        case 'grbl':
+            var code;
+            switch (data) {
+            case 0:
+                code = 144; // set to 100%
+                data = '100';
+                break;
+            case 10:
+                code = 145; // +10%
+                data = '+' + data;
+                break;
+            case -10:
+                code = 146; // -10%
+                break;
+            case 1:
+                code = 147; // +1%
+                data = '+' + data;
+                break;
+            case -1:
+                code = 148; // -1%
+                break;
+            }
+            if (code) {
+                //jumpQ(String.fromCharCode(parseInt(code)));
+                machineSend(String.fromCharCode(parseInt(code)));
+                writeLog('Sent: Code(' + code + ')', 2);
+                writeLog(chalk.red('Feed Override ' + data + '%'), 1);
+            }
+            break;
+        case 'smoothie':
+            if (data === 0) {
+                feedOverride = 100;
+            } else {
+                if ((feedOverride + data <= 200) && (feedOverride + data >= 10)) {
+                    // valid range is 10..200, else ignore!
+                    feedOverride += data;
+                }
+            }
+            //jumpQ('M220S' + feedOverride);
+            machineSend('M220S' + feedOverride + '\n');
+            writeLog('Sent: M220S' + feedOverride, 2);
+            io.sockets.emit('feedOverride', feedOverride);
+            writeLog(chalk.red('Feed Override ' + feedOverride.toString() + '%'), 1);
+            //send1Q();
+            break;
+        case 'tinyg':
+            break;
+        case 'repetier':
+        case 'marlinkimbra':
+            if (data === 0) {
+                feedOverride = 100;
+            } else {
+                if ((feedOverride + data <= 200) && (feedOverride + data >= 10)) {
+                    // valid range is 10..200, else ignore!
+                    feedOverride += data;
+                }
+            }
+            machineSend('M220 S' + feedOverride + '\n');
+            reprapBufferSize--;
+            writeLog('Sent: M220 S' + feedOverride, 2);
+            io.sockets.emit('feedOverride', feedOverride);
+            writeLog(chalk.red('Feed Override ' + feedOverride.toString() + '%'), 1);
+            break;
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function spindleOverride(data) {
+    if (isConnected) {
+        switch (firmware) {
+        case 'grbl':
+            var code;
+            switch (data) {
+            case 0:
+                code = 153; // set to 100%
+                data = '100';
+                break;
+            case 10:
+                code = 154; // +10%
+                data = '+' + data;
+                break;
+            case -10:
+                code = 155; // -10%
+                break;
+            case 1:
+                code = 156; // +1%
+                data = '+' + data;
+                break;
+            case -1:
+                code = 157; // -1%
+                break;
+            }
+            if (code) {
+                //jumpQ(String.fromCharCode(parseInt(code)));
+                machineSend(String.fromCharCode(parseInt(code)));
+                writeLog('Sent: Code(' + code + ')', 2);
+                writeLog(chalk.red('Spindle (Laser) Override ' + data + '%'), 1);
+            }
+            break;
+        case 'smoothie':
+            if (data === 0) {
+                spindleOverride = 100;
+            } else {
+                if ((spindleOverride + data <= 200) && (spindleOverride + data >= 0)) {
+                    // valid range is 0..200, else ignore!
+                    spindleOverride += data;
+                }
+            }
+            //jumpQ('M221S' + spindleOverride);
+            machineSend('M221S' + spindleOverride + '\n');
+            writeLog('Sent: M221S' + spindleOverride, 2);
+            io.sockets.emit('spindleOverride', spindleOverride);
+            writeLog(chalk.red('Spindle (Laser) Override ' + spindleOverride.toString() + '%'), 1);
+            //send1Q();
+            break;
+        case 'tinyg':
+            break;
+        case 'repetier':
+        case 'marlinkimbra':
+            if (data === 0) {
+                spindleOverride = 100;
+            } else {
+                if ((spindleOverride + data <= 200) && (spindleOverride + data >= 0)) {
+                    // valid range is 0..200, else ignore!
+                    spindleOverride += data;
+                }
+            }
+            machineSend('M221 S' + spindleOverride + '\n');
+            reprapBufferSize--;
+            writeLog('Sent: M221 S' + spindleOverride, 2);
+            io.sockets.emit('spindleOverride', spindleOverride);
+            writeLog(chalk.red('Spindle (Laser) Override ' + spindleOverride.toString() + '%'), 1);
+            break;
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function laserTest(data) {
+    if (isConnected) {
+        if (!Array.isArray(data)) {
+            data = data.split(',');
+        }
+        var power = parseFloat(data[0]);
+        var duration = parseInt(data[1]);
+        var maxS = parseFloat(data[2]);
+        if (power > 0) {
+            if (!laserTestOn) {
+                // laserTest is off
+                writeLog('laserTest: ' + 'Power ' + power + ', Duration ' + duration + ', maxS ' + maxS, 1);
+                if (duration >= 0) {
+                    switch (firmware) {
+                    case 'grbl':
+                        addQ('G1F1');
+                        addQ('M3S' + parseInt(power * maxS / 100));
+                        laserTestOn = true;
+                        appSocket.emit('laserTest', power);
+                        if (duration > 0) {
+                            addQ('G4 P' + duration / 1000);
+                            addQ('M5S0');
+                            laserTestOn = false;
+                            //appSocket.emit('laserTest', 0); //-> Grbl get the real state with status report
+                        }
+                        send1Q();
+                        break;
+                    case 'smoothie':
+                        addQ('M3\n');
+                        addQ('fire ' + power + '\n');
+                        laserTestOn = true;
+                        appSocket.emit('laserTest', power);
+                        if (duration > 0) {
+                            var divider = 1;
+                            if (fDate >= new Date('2017-01-02')) {
+                                divider = 1000;
+                            }
+                            addQ('G4P' + duration / divider + '\n');
+                            addQ('fire off\n');
+                            addQ('M5');
+                            setTimeout(function () {
+                                laserTestOn = false;
+                                appSocket.emit('laserTest', 0);
+                            }, duration );
+                        }
+                        send1Q();
+                        break;
+                    case 'tinyg':
+                        addQ('G1F1');
+                        addQ('M3S' + parseInt(power * maxS / 100));
+                        laserTestOn = true;
+                        appSocket.emit('laserTest', power);
+                        if (duration > 0) {
+                            addQ('G4 P' + duration / 1000);
+                            addQ('M5S0');
+                            laserTestOn = false;
+                            setTimeout(function () {
+                                laserTestOn = false;
+                                appSocket.emit('laserTest', 0);
+                            }, duration );
+                        }
+                        send1Q();
+                        break;
+                    case 'repetier':
+                    case 'marlinkimbra':
+                        addQ('G1F1');
+                        addQ('M3 S' + parseInt(power * maxS / 100));
+                        addQ('M4');
+                        laserTestOn = true;
+                        appSocket.emit('laserTest', power);
+                        if (duration > 0) {
+                            addQ('G4 P' + duration / 1000);
+                            addQ('M5');
+                            laserTestOn = false;
+                            setTimeout(function () {
+                                laserTestOn = false;
+                                appSocket.emit('laserTest', 0);
+                            }, duration );
+                        }
+                        send1Q();
+                        break;
+                    }
+                }
+            } else {
+                writeLog('laserTest: ' + 'Power off', 1);
+                switch (firmware) {
+                case 'grbl':
+                    addQ('M5S0');
+                    send1Q();
+                    break;
+                case 'smoothie':
+                    addQ('fire off\n');
+                    addQ('M5\n');
+                    send1Q();
+                    break;
+                case 'tinyg':
+                    addQ('M5S0');
+                    send1Q();
+                    break;
+                case 'repetier':
+                case 'marlinkimbra':
+                    addQ('M5');
+                    send1Q();
+                    break;
+                }
+                laserTestOn = false;
+                appSocket.emit('laserTest', 0);
+            }
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function pauseMachine() {
+    if (isConnected) {
+        paused = true;
+        writeLog(chalk.red('PAUSE'), 1);
+        switch (firmware) {
+        case 'grbl':
+            machineSend('!'); // Send hold command
+            writeLog('Sent: !', 2);
+            if (fVersion === '1.1d') {
+                machineSend(String.fromCharCode(0x9E)); // Stop Spindle/Laser
+                writeLog('Sent: Code(0x9E)', 2);
+            }
+            break;
+        case 'smoothie':
+            machineSend('!'); // Laser will be turned off by smoothie (in default config!)
+            //machineSend('M600\n'); // Laser will be turned off by smoothie (in default config!)
+            writeLog('Sent: !', 2);
+            break;
+        case 'tinyg':
+            machineSend('!'); // Send hold command
+            writeLog('Sent: !', 2);
+            break;
+        case 'repetier':
+        case 'marlinkimbra':
+            // just stop sending gcodes
+            break;
+        }
+        io.sockets.emit('runStatus', 'paused');
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function resumeMachine() {
+    if (isConnected) {
+        writeLog(chalk.red('UNPAUSE'), 1);
+        //io.sockets.emit('connectStatus', 'unpaused:' + port.path);
+        switch (firmware) {
+        case 'grbl':
+            machineSend('~'); // Send resume command
+            writeLog('Sent: ~', 2);
+            break;
+        case 'smoothie':
+            machineSend('~'); // Send resume command
+            //machineSend('M601\n');
+            writeLog('Sent: ~', 2);
+            break;
+        case 'tinyg':
+            machineSend('~'); // Send resume command
+            writeLog('Sent: ~', 2);
+            break;
+        case 'repetier':
+        case 'marlinkimbra':
+            break;
+        }
+        paused = false;
+        send1Q(); // restart queue
+        io.sockets.emit('runStatus', 'resumed');
+//            switch (connectionType) {
+//            case 'usb':
+//                io.sockets.emit("connectStatus", 'opened:' + port.path);
+//                break;
+//            case 'telnet':
+//                io.sockets.emit("connectStatus", 'opened:' + connectedIp);
+//                break;
+//            case 'esp8266':
+//                io.sockets.emit("connectStatus", 'opened:' + connectedIp);
+//                break;
+//            }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function stopMachine() {
+    if (isConnected) {
+        paused = true;
+        writeLog(chalk.red('STOP'), 1);
+        switch (firmware) {
+        case 'grbl':
+            machineSend('!'); // hold
+            writeLog('Sent: !', 2);
+            if (fVersion === '1.1d') {
+                machineSend(String.fromCharCode(0x9E)); // Stop Spindle/Laser
+                writeLog('Sent: Code(0x9E)', 2);
+            }
+            writeLog('Cleaning Queue', 1);
+            gcodeQueue.length = 0; // Dump the Queye
+            grblBufferSize.length = 0; // Dump bufferSizes
+            queueLen = 0;
+            queuePointer = 0;
+            queuePos = 0;
+            startTime = null;
+            machineSend(String.fromCharCode(0x18)); // ctrl-x
+            writeLog('Sent: Code(0x18)', 2);
+            blocked = false;
+            paused = false;
+            break;
+        case 'smoothie':
+            paused = true;
+            machineSend(String.fromCharCode(0x18)); // ctrl-x
+            writeLog('Sent: Code(0x18)', 2);
+            break;
+        case 'tinyg':
+            paused = true;
+            machineSend('!'); // hold
+            writeLog('Sent: !', 2);
+            machineSend('%'); // dump TinyG queue
+            writeLog('Sent: %', 2);
+            break;
+        case 'repetier':
+        case 'marlinkimbra':
+            paused = true;
+            machineSend('M112/n'); // hold
+            writeLog('Sent: M112', 2);
+            break;
+        }
+        clearInterval(queueCounter);
+        io.sockets.emit('qCount', 0);
+        gcodeQueue.length = 0; // Dump the Queye
+        grblBufferSize.length = 0; // Dump bufferSizes
+        tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+        reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+        reprapWaitForPos = false;
+        queueLen = 0;
+        queuePointer = 0;
+        queuePos = 0;
+        laserTestOn = false;
+        startTime = null;
+        runningJob = null;
+        blocked = false;
+        paused = false;
+        io.sockets.emit('runStatus', 'stopped');
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function clearAlarm(data) {
+    if (isConnected) {
+        data = parseInt(data);
+        writeLog('Clearing Queue: Method ' + data, 1);
+        switch (data) {
+        case 1:
+            writeLog('Clearing Lockout');
+            switch (firmware) {
+            case 'grbl':
+                machineSend('$X\n');
+                writeLog('Sent: $X', 2);
+                break;
+            case 'smoothie':
+                machineSend('$X\n');
+                writeLog('Sent: $X', 2);
+                break;
+            case 'tinyg':
+                machineSend('$X\n');
+                writeLog('Sent: $X', 2);
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                machineSend('M112\n');
+                writeLog('Sent: M112', 2);
+                break;
+            }
+            writeLog('Resuming Queue Lockout', 1);
+            break;
+        case 2:
+            writeLog('Emptying Queue', 1);
+            gcodeQueue.length = 0; // Dump the Queye
+            grblBufferSize.length = 0; // Dump bufferSizes
+            tinygBufferSize = TINYG_RX_BUFFER_SIZE;  // reset tinygBufferSize
+            reprapBufferSize = REPRAP_RX_BUFFER_SIZE; // reset reprapBufferSize
+            reprapWaitForPos = false;
+            queueLen = 0;
+            queuePointer = 0;
+            queuePos = 0;
+            startTime = null;
+            writeLog('Clearing Lockout', 1);
+            switch (firmware) {
+            case 'grbl':
+                machineSend('$X\n');
+                writeLog('Sent: $X', 2);
+                blocked = false;
+                paused = false;
+                break;
+            case 'smoothie':
+                machineSend('$X\n'); //M999
+                writeLog('Sent: $X', 2);
+                blocked = false;
+                paused = false;
+                break;
+            case 'tinyg':
+                machineSend('%'); // flush tinyg quere
+                writeLog('Sent: %', 2);
+                //machineSend('~'); // resume
+                //writeLog('Sent: ~', 2);
+                blocked = false;
+                paused = false;
+                break;
+            case 'repetier':
+            case 'marlinkimbra':
+                machineSend('M112/b');
+                writeLog('Sent: M112', 2);
+                blocked = false;
+                paused = false;
+                break;
+            }
+            break;
+        }
+        io.sockets.emit('runStatus', 'stopped');
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
+
+function resetMachine() {
+    if (isConnected) {
+        writeLog(chalk.red('Reset Machine'), 1);
+        switch (firmware) {
+        case 'grbl':
+            machineSend(String.fromCharCode(0x18)); // ctrl-x
+            writeLog('Sent: Code(0x18)', 2);
+            break;
+        case 'smoothie':
+            machineSend(String.fromCharCode(0x18)); // ctrl-x
+            writeLog('Sent: Code(0x18)', 2);
+            break;
+        case 'tinyg':
+            machineSend(String.fromCharCode(0x18)); // ctrl-x
+            writeLog('Sent: Code(0x18)', 2);
+            break;
+        case 'repetier':
+        case 'marlinkimbra':
+            machineSend('M112/n');
+            writeLog('Sent: M112', 2);
+            break;
+        }
+    } else {
+        io.sockets.emit("connectStatus", 'closed');
+        io.sockets.emit('connectStatus', 'Connect');
+        writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+    }
+}
 
 
 // Queue
@@ -2853,10 +2970,296 @@ function send1Q() {
     }
 }
 
+
+//==========================
+// MPG CMD Byte Packet Names
+const MPG_CMD_START_BYTE = 0;
+const MPG_CMD_BYTE1 = 1;
+const MPG_CMD_PADDING = 2;
+const MPG_CMD_DIAL_BYTE = 3;
+const MPG_CMD_VELOCITY = 4;
+const MPG_CMD_BYTE2 = 5;
+//==========================
+
+//==========================
+// MPG DIAL Modes (CMD[3])
+const MPG_DIAL_OFF = 0x00;
+const MPG_DIAL_X_AXIS = 0x11;
+const MPG_DIAL_Y_AXIS = 0x12;
+const MPG_DIAL_Z_AXIS = 0x13;
+const MPG_DIAL_A_AXIS = 0x18;
+const MPG_DIAL_SPINDLE_DIAL = 0x14;
+const MPG_DIAL_FEED_DIAL = 0x15;
+//==========================
+
+var CMDS = [
+    {name: "sleep", value: [0x00, 0x00], tinyg: "None"},
+    {name: "keyup", value: [0x00, 0x11], tinyg: "\n"},
+    {name: "arrow1", value: [0x01, 0x10], tinyg: "g28.3x0y0z0a0\n"}, //Set Zero
+    {name: "pause_resume", value: [0x02, 0x13], tinyg: "~ || !"},
+    {name: "rewind", value: [0x03, 0x12], tinyg: "None"},
+    {name: "probez", value: [0x04, 0x15], tinyg: "g28.3z0"},
+    {name: "macro3", value: [0x05, 0x14]},
+    {name: "half", value: [0x06, 0x17], tinyg: "None"},
+    {name: "zero", value: [0x07, 0x16], tinyg: "g28.3"},
+    {name: "safez", value: [0x08, 0x19], tinyg: "g92"},
+    {name: "arrow2", value: [0x09, 0x18], tinyg: "g0x0y0z0a0\n"}, //Go to zero
+    {name: "macro1", value: [0x0a, 0x1b]},
+    {name: "macro2", value: [0x0b, 0x1a]},
+    {name: "spindle", value: [0x0c, 0x1d], tinyg: "None"},
+    {name: "step++", value: [0x0d, 0x1c], tinyg: "\n"},
+    {name: "model", value: [0x0e, 0x1f]},
+    {name: "macro6", value: [0x0f, 0x1e]},
+    {name: "macro7", value: [0x10, 0x01]},
+    {name: "stop", value: [0x16, 0x07], tinyg: "!\n%\n"},
+    {name: "reset", value: [0x17, 0x06], tinyg: "None"},
+];
+
+var count = 15;
+var isJogging = false;
+var jogMode = "incremental"; //vs "continuous"
+var units = "mm";
+var stepDistance = 0;
+var jogVelocityMultiplier = 1;
+var velocityMin = 40; //mm/min
+var calculatedVelocity = velocityMin;
+var distanceTable = [1, 10, 100, 0.01, 0.1];
+
+function getDialSetting(dialByte) {
+    switch (dialByte) {
+        case(MPG_DIAL_OFF):
+            return ("DIAL_OFF");
+        case(MPG_DIAL_X_AXIS):
+            return ("X");
+        case(MPG_DIAL_Y_AXIS):
+            return ("Y");
+        case(MPG_DIAL_Z_AXIS):
+            return ("Z");
+        case(MPG_DIAL_A_AXIS):
+            return ("A");
+        case(MPG_DIAL_SPINDLE_DIAL):
+            return ("SPINDLE");
+        case(MPG_DIAL_FEED_DIAL):
+            return ("FEED");
+    }
+}
+
+function getStepDistance(){
+    return distanceTable[stepDistance];
+}
+
+function setStepDistance() {
+    stepDistance = stepDistance + 1;
+    if (stepDistance == 5) {
+        stepDistance = 0;
+    }
+}
+
+//Continuous is the machine will continue to jog as long as there are event dial events coming in.
+function doJogContinuous(dialSetting, cmd) {
+    //build our jog command
+    var velocity = cmd.value[1];
+    //We need to figure out if this is a negative move or a positive move
+    if (velocity > 0xaa) {
+        sign = "-";
+        velocity = 255 - velocity; // When rotating counter clockwise the velocity
+        //Comes in as 0xfe for 1 which we will subtract from 0xff to get a sane number
+    } else {
+        sign = ""
+    }
+    tmpCalc = (velocity * 10) * velocityMin;
+    if(tmpCalc > calculatedVelocity){
+        calculatedVelocity = tmpCalc; //If we are moving faster than previously we will increase our speed.
+    }
+    console.log("SANE VELOCITY: " + velocity);
+    cmd.tinyg = "G91\nG1F" + calculatedVelocity + dialSetting + sign + count + "\n";
+    return (cmd);
+}
+
+//Incremental Will only single step then stop and wait for another click of the jog dial.
+function doJogIncremental(dialSetting, cmd) {
+    var sign = '';
+    //build our jog command
+    //We need to figure out if this is a negative move or a positive move
+    if (cmd.value[1] > 0xaa) {
+        sign = "-";
+    }
+    var feed = 3000;
+    jog([dialSetting, sign + getStepDistance(), feed]);
+}
+
+function parseCommand(data) {
+    for (var i = 0; i < CMDS.length; i++) {
+        if (data[MPG_CMD_BYTE1] == CMDS[i].value[0] && data[MPG_CMD_BYTE2] == CMDS[i].value[1]) {
+
+            if (data[MPG_CMD_VELOCITY] != 0x00) {
+                //We got a velocity, Now this is a JOG command vs a Keyup command.
+                return ({name: "jog", value: [0x00, data[MPG_CMD_VELOCITY], 0x9a], tinyg: "G1F100"})
+            }
+            return (CMDS[i]);
+        }
+    }
+    return null;
+}
+
+function parseMPGPacket(data) {
+    if (data[MPG_CMD_START_BYTE] == 0x04) { //0x04 is a constant for this device as the first byte
+        var dialSetting = getDialSetting(data[MPG_CMD_DIAL_BYTE]);
+        var _tmpCmd = parseCommand(data);
+
+        if (_tmpCmd) {
+            console.log("DIAL: " + dialSetting + " Command: " + _tmpCmd.name, " TinyG: " + _tmpCmd.tinyg);
+
+            switch (_tmpCmd.name) {
+                case("rewind"):
+                    //io.sockets.emit('rewind', 1);
+                    break;
+                
+                case("probez"):
+                    probe({direction: 'z', probeOffset: 0});
+                    break;
+                    
+                case("spindle"):
+                    laserTest({power: 1, duration: 0});
+                    break;
+                    
+                case("safez"):
+                    console.log("safez");
+                    break;
+                    
+                case("stop"):
+                    stopMachine();
+                    break;
+
+                case("keyup"):
+                    //If we were jogging we are in incremental mode
+                    //We need to exit this mode now that we are done jogging.
+                    if (isJogging) {
+                        isJogging = false;
+
+                        //What this does is if you are in continuous mode you will move until
+                        //you stop twisting the dial.  This will then issue a feedhold flush command.
+                        if (jogMode == "continuous") {
+                            sendStopFlush();
+                            calculatedVelocity = velocityMin;
+                        }
+
+                        machineSend("G90\n");
+                        console.log("::-----Exiting Jog Mode------::");
+                    }
+                    break;
+
+                case("jog"):
+                    console.log("::-----Entering Jog Mode------::");
+                    isJogging = true;
+                    if (jogMode == "incremental") {
+                        doJogIncremental(dialSetting, _tmpCmd);
+                    } else {
+                        _tmpCmd = doJogContinuous(dialSetting, _tmpCmd);
+                    }
+                    break;
+
+                case("pause_resume"):
+                    if (paused) {
+                        console.log("Sending Resume");
+                        machineSend('~');
+                    } else {
+                        machineSend('!');
+                        console.log("Sending Feedhold/Pause");
+                    }
+                    break;
+
+                case("half"):
+                    console.log("Half");
+                    break;
+
+                case("zero"):
+                    switch(dialSetting) {
+                        case "DIAL_OFF":
+                        case "SPINDLE":
+                        case "FEED":
+                            break;
+                        default:
+                            setZero(dialSetting.toLowerCase());
+                            break;
+                    }
+                    break;
+
+                case("arrow1"):
+                    setZero('all');
+                    break;
+                    
+                case("arrow2"): //Arrow2 is, at least for now go to zero on all axis
+                    gotoZero('all');
+                    break;
+
+                case("step++"):
+                    setStepDistance();
+                    var stepSize = getStepDistance();
+                    console.log("Changing Step Rate for Incremental Mode to " + stepSize);
+                    io.sockets.emit('stepSize', stepSize);
+                    break;
+
+                case("model"):
+                    console.log("-----Changing Jog Modes----");
+                    if (jogMode == "incremental") {
+                        jogMode = "continuous";
+                    } else {
+                        jogMode = "incremental";
+                    }
+                    console.log("MODE: " + jogMode);
+                    break;
+
+                case("sleep"):
+                    console.log("MPG goes sleep");
+                    break;
+
+                case('reset'):
+                    resetMachine();
+                    break;
+                    
+                case("macro1"):
+                    console.log("Macro1");
+                    runMarco(1);
+                    break;
+                
+                case("macro2"):
+                    console.log("Macro2");
+                    runMarco(2);
+                    break;
+                    
+                case("macro3"):
+                    console.log("Macro3");
+                    runMarco(3);
+                    break;
+
+                case("macro6"):
+                    console.log("Macro6");
+                    runMarco(6);
+                    break;
+                    
+                case("macro7"):
+                    console.log("Macro7");
+                    runMarco(7);
+                    break;
+
+                default:
+                    console.log("Un-Caught Case: " + _tmpCmd.name, _tmpCmd.value);
+                    break;
+            }
+
+        } else {
+            console.log("DIAL: " + dialSetting + " Command Code Unknown: ", data);
+
+        }
+    }
+}
+
+
 function isElectron() {
     if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
         return true;
-    }
+    }   
     if (typeof process !== 'undefined' && process.versions && !!process.versions.electron) {
         return true;
     }
