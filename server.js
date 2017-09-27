@@ -92,11 +92,10 @@ var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
 
-var vendorId = 4302;    // for MPG: XHC HB04-L
-var productId = 60272;  // for MPG: XHC HB04-L
-//var dev = new HID.HID('USB_10ce_eb70_14100000');
+var vendorId = 4302;    // for MPG: XHC HB04-L (0x10CE)
+var productId = 60272;  // for MPG: XHC HB04-L (0xEB70)
 var mpgType = config.mpgType;
-var mpg;
+var mpgRead, mpgWrite;
 var macro = [];
 
 
@@ -154,11 +153,24 @@ var io = websockets.listen(app);
 
 // MPG communication
 if (mpgType == 1){
-    mpg = new HID.HID(vendorId, productId);
+    var devices = HID.devices();
+    devices.forEach(function(device) {
+        if (device.vendorId == vendorId && device.productId == productId){
+            if (!mpgRead) {
+                mpgRead = new HID.HID(device.path);
+                console.log("HID read device: " + device.path);
+            } else {
+                mpgWrite = new HID.HID(device.path);
+                console.log("HID write device: " + device.path);
+            }
+        }
+    });
 
-    mpg.on("data", function (data) {
-        //writeLog(chalk.yellow('MPG: ' + JSON.stringify(data)), 1);
-        parseMPGPacket(data);
+    mpgRead.on("data", function (data) {
+        writeLog(chalk.yellow('MPG: ' + JSON.stringify(data)), 1);
+        if (data) {
+            parseMPGPacket(data);
+        }
     });
 }
 
@@ -434,8 +446,10 @@ io.sockets.on('connection', function (appSocket) {
                                 if (send) {
                                     if (has4thAxis) {
                                         io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                        setMpgWPos({x: xPos, y: yPos, z: zPos, a: aPos});
                                     } else {
                                         io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos});
+                                        setMpgWPos({x: xPos, y: yPos, z: zPos});
                                     }
                                 }
                             }
@@ -455,8 +469,10 @@ io.sockets.on('connection', function (appSocket) {
                                 if (send) {
                                     if (has4thAxis) {
                                         io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                        setMpgWOffset({x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                     } else {
                                         io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset});
+                                        setMpgWOffset({x: xOffset, y: yOffset, z: zOffset});
                                     }
                                 }
                             }
@@ -492,8 +508,10 @@ io.sockets.on('connection', function (appSocket) {
                                 if (send) {
                                     if (has4thAxis) {
                                         io.sockets.emit('wPos', {x: parseFloat(xPos).toFixed(config.posDecimals), y: parseFloat(yPos).toFixed(config.posDecimals), z: parseFloat(zPos).toFixed(config.posDecimals), a: parseFloat(aPos).toFixed(config.posDecimals)});
+                                        setMpgWPos({x: xPos, y: yPos, z: zPos, a: aPos});
                                     } else {
                                         io.sockets.emit('wPos', {x: parseFloat(xPos).toFixed(config.posDecimals), y: parseFloat(yPos).toFixed(config.posDecimals), z: parseFloat(zPos).toFixed(config.posDecimals)});
+                                        setMpgWPos({x: xPos, y: yPos, z: zPos});
                                     }
                                 }
                             }
@@ -526,8 +544,10 @@ io.sockets.on('connection', function (appSocket) {
                                 if (send) {
                                     if (has4thAxis) {
                                         io.sockets.emit('wOffset', {x: parseFloat(xOffset).toFixed(config.posDecimals), y: parseFloat(yOffset).toFixed(config.posDecimals), z: parseFloat(zOffset).toFixed(config.posDecimals), a: parseFloat(aOffset).toFixed(config.posDecimals)});
+                                        setMpgWOffset({x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                     } else {
                                         io.sockets.emit('wOffset', {x: parseFloat(xOffset).toFixed(config.posDecimals), y: parseFloat(yOffset).toFixed(config.posDecimals), z: parseFloat(zOffset).toFixed(config.posDecimals)});
+                                        setMpgWOffset({x: xOffset, y: yOffset, z: zOffset});
                                     }
                                 }
                             }
@@ -592,6 +612,7 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }
                         io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                        setMpgWPos({x: xPos, y: yPos, z: zPos, a: aPos});
                         //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
                         reprapWaitForPos = false;
 
@@ -723,6 +744,7 @@ io.sockets.on('connection', function (appSocket) {
                             }
                             if (send) {
                                 io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                setMpgWPos({x: xPos, y: yPos, z: zPos, a: aPos});
                                 //writeLog('wPos: ' + xPos + ', ' + yPos + ', ' + zPos + ', ' + aPos, 3);
                             }
                             if (jsObject.sr.stat) {
@@ -987,6 +1009,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                                 if (send) {
                                     io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                                    setMpgWPos({x: xPos, y: yPos, z: zPos, a: aPos});
                                 }
                             }
                             // Extract mPos (for smoothieware only!)
@@ -1015,6 +1038,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                                 if (send) {
                                     io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                    setMpgWOffset({x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                 }
                             }
                             // Extract work offset (for Grbl > 1.1 only!)
@@ -1030,6 +1054,7 @@ io.sockets.on('connection', function (appSocket) {
                                 aOffset = parseFloat(wco[3]).toFixed(config.posDecimals);
                                 if (send) {
                                     io.sockets.emit('wOffset', {x: xOffset, y: yOffset, z: zOffset, a: aOffset});
+                                    setMpgWOffset({x: xOffset, y: yOffset, z: zOffset, a: aOffset});
                                 }
                             }
                             // Extract override values (for Grbl > v1.1 only!)
@@ -1092,6 +1117,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                             io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
+                            setMpgWPos({x: xPos, y: yPos, z: zPos, a: aPos});
                             //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
                             reprapWaitForPos = false;
                         } else if (data.indexOf('WCS:') >= 0) {
@@ -1111,6 +1137,7 @@ io.sockets.on('connection', function (appSocket) {
                                 var wpos = wxpos + ',' + wypos + ',' + wzpos + ',' + wapos;
                                 writeLog('Telnet: ' + 'WPos:' + wpos, 1);
                                 io.sockets.emit('wPos', {x: wxpos, y: wypos, z: wzpos, a: wapos});
+                                setMpgWPos({x: wxpos, y: wypos, z: wzpos, a: wapos});
                             }
                         } else if (data.indexOf('MCS:') >= 0) {
                             //console.log('Telnet:', response);
@@ -1129,6 +1156,7 @@ io.sockets.on('connection', function (appSocket) {
                                 var mpos = mxpos + ',' + mypos + ',' + mzpos + ',' + mapos;
                                 writeLog('Telnet: ' + 'MPos:' + mpos, 1);
                                 io.sockets.emit('mPos', {x: mxpos, y: mypos, z: mzpos, a: mapos});
+                                setMpgMPos({x: mxpos, y: mypos, z: mzpos, a: mapos});
                             }
                         } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
                             firmware = 'grbl';
@@ -1728,10 +1756,18 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('jog', function (data) {
-        jog(data);
+        data = data.split(',');
+        var dir = data[0];
+        var dist = parseFloat(data[1]);
+        var feed = '';
+        if (data.length > 2) {
+            feed = parseInt(data[2]);
+        }
+        jog({dir: dir, dist: dist, feed: feed});
     });
 
-    appSocket.on('jogTo', function (data) {     // data = {x:xVal, y:yVal, z:zVal, mode:0(absulute)|1(relative), feed:fVal}
+    appSocket.on('jogTo', function (data) {     
+        // data = {x:xVal, y:yVal, z:zVal, mode:0(absulute)|1(relative), feed:fVal}
         jogTo(data);
     });
 
@@ -1748,19 +1784,31 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('home', function (data) {
-        home(data);
+        var err = home(data);
+        if (err) {
+            appSocket.emit('error', err);
+        }
     });
 
     appSocket.on('probe', function (data) {
-        probe(data);
+        var err = probe(data);
+        if (err) {
+            appSocket.emit('error', err);
+        }
     });
     
     appSocket.on('feedOverride', function (data) {
-        feedOverride(data);
+        var err = feedOv(data);
+        if (err) {
+            appSocket.emit('error', err);
+        }
     });
 
     appSocket.on('spindleOverride', function (data) {
-        spindleOverride(data);
+        var err = spindleOv(data);
+        if (err) {
+            appSocket.emit('error', err);
+        }
     });
 
     appSocket.on('laserTest', function (data) { // Laser Test Fire
@@ -1958,14 +2006,11 @@ function runCommand(data) {
 
 function jog(data) {
     // data: direction, distance, feed
-    if (!Array.isArray(data)) {
-        data = data.split(',');
-    }
-    var dir = data[0];
-    var dist = parseFloat(data[1]);
+    var dir = data.dir;
+    var dist = data.dist;
     var feed = '';
-    if (data.length > 2) {
-        feed = parseInt(data[2]);
+    if (data.feed){
+        feed = parseInt(data.feed);
         if (feed) {
             feed = 'F' + feed;   
         }
@@ -2164,7 +2209,7 @@ function home(data) {
                 break;
             default:
                 //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
+                return 'Command not supported by firmware!';
                 break;
             }
             break;
@@ -2177,7 +2222,7 @@ function home(data) {
                 break;
             default:
                 //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
+                return 'Command not supported by firmware!';
                 break;
             }
             break;
@@ -2190,7 +2235,7 @@ function home(data) {
                 break;
             default:
                 //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
+                return 'Command not supported by firmware!';
                 break;
             }
             break;
@@ -2203,7 +2248,7 @@ function home(data) {
                 break;
             default:
                 //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
+                return 'Command not supported by firmware!';
                 break;
             }
             break;
@@ -2219,7 +2264,7 @@ function home(data) {
                 break;
             default:
                 //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
+                return 'Command not supported by firmware!';
                 break;
             }
             break;
@@ -2235,7 +2280,7 @@ function home(data) {
                 break;
             default:
                 //not supported
-                appSocket.emit('error', 'Command not supported by firmware!');
+                return 'Command not supported by firmware!';
                 break;
             }
             break;
@@ -2271,7 +2316,7 @@ function probe(data) {
             break;
         default:
             //not supported
-            appSocket.emit('error', 'Command not supported by firmware!');
+            return 'Command not supported by firmware!';
             break;
         }
         send1Q();
@@ -2282,7 +2327,7 @@ function probe(data) {
     }
 }
 
-function feedOverride(data) {
+function feedOv(data) {
     if (isConnected) {
         switch (firmware) {
         case 'grbl':
@@ -2356,7 +2401,7 @@ function feedOverride(data) {
     }
 }
 
-function spindleOverride(data) {
+function spindleOv (data) {
     if (isConnected) {
         switch (firmware) {
         case 'grbl':
@@ -2448,12 +2493,12 @@ function laserTest(data) {
                         addQ('G1F1');
                         addQ('M3S' + parseInt(power * maxS / 100));
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             addQ('G4 P' + duration / 1000);
                             addQ('M5S0');
                             laserTestOn = false;
-                            //appSocket.emit('laserTest', 0); //-> Grbl get the real state with status report
+                            //io.sockets.emit('laserTest', 0); //-> Grbl get the real state with status report
                         }
                         send1Q();
                         break;
@@ -2461,7 +2506,7 @@ function laserTest(data) {
                         addQ('M3\n');
                         addQ('fire ' + power + '\n');
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             var divider = 1;
                             if (fDate >= new Date('2017-01-02')) {
@@ -2472,7 +2517,7 @@ function laserTest(data) {
                             addQ('M5');
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration );
                         }
                         send1Q();
@@ -2481,14 +2526,14 @@ function laserTest(data) {
                         addQ('G1F1');
                         addQ('M3S' + parseInt(power * maxS / 100));
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             addQ('G4 P' + duration / 1000);
                             addQ('M5S0');
                             laserTestOn = false;
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration );
                         }
                         send1Q();
@@ -2506,7 +2551,7 @@ function laserTest(data) {
                             laserTestOn = false;
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration );
                         }
                         send1Q();
@@ -2536,7 +2581,7 @@ function laserTest(data) {
                     break;
                 }
                 laserTestOn = false;
-                appSocket.emit('laserTest', 0);
+                io.sockets.emit('laserTest', 0);
             }
         }
     } else {
@@ -2988,31 +3033,31 @@ const MPG_DIAL_X_AXIS = 0x11;
 const MPG_DIAL_Y_AXIS = 0x12;
 const MPG_DIAL_Z_AXIS = 0x13;
 const MPG_DIAL_A_AXIS = 0x18;
-const MPG_DIAL_SPINDLE_DIAL = 0x14;
-const MPG_DIAL_FEED_DIAL = 0x15;
+const MPG_DIAL_SPINDLE = 0x14;
+const MPG_DIAL_FEED = 0x15;
 //==========================
 
 var CMDS = [
-    {name: "sleep", value: [0x00, 0x00], tinyg: "None"},
-    {name: "keyup", value: [0x00, 0x11], tinyg: "\n"},
-    {name: "arrow1", value: [0x01, 0x10], tinyg: "g28.3x0y0z0a0\n"}, //Set Zero
-    {name: "pause_resume", value: [0x02, 0x13], tinyg: "~ || !"},
-    {name: "rewind", value: [0x03, 0x12], tinyg: "None"},
-    {name: "probez", value: [0x04, 0x15], tinyg: "g28.3z0"},
+    {name: "sleep", value: [0x00, 0x00], gcode: "None"},
+    {name: "keyup", value: [0x00, 0x11], gcode: "\n"},
+    {name: "arrow1", value: [0x01, 0x10], gcode: "g28.3x0y0z0a0\n"}, //Set Zero
+    {name: "start_pause", value: [0x02, 0x13], gcode: "~ || !"},
+    {name: "rewind", value: [0x03, 0x12], gcode: "None"},
+    {name: "probez", value: [0x04, 0x15], gcode: "g28.3z0"},
     {name: "macro3", value: [0x05, 0x14]},
-    {name: "half", value: [0x06, 0x17], tinyg: "None"},
-    {name: "zero", value: [0x07, 0x16], tinyg: "g28.3"},
-    {name: "safez", value: [0x08, 0x19], tinyg: "g92"},
-    {name: "arrow2", value: [0x09, 0x18], tinyg: "g0x0y0z0a0\n"}, //Go to zero
+    {name: "half", value: [0x06, 0x17], gcode: "None"},
+    {name: "zero", value: [0x07, 0x16], gcode: "g28.3"},
+    {name: "safez", value: [0x08, 0x19], gcode: "g92"},
+    {name: "arrow2", value: [0x09, 0x18], gcode: "g0x0y0z0a0\n"}, //Go to zero
     {name: "macro1", value: [0x0a, 0x1b]},
     {name: "macro2", value: [0x0b, 0x1a]},
-    {name: "spindle", value: [0x0c, 0x1d], tinyg: "None"},
-    {name: "step++", value: [0x0d, 0x1c], tinyg: "\n"},
+    {name: "spindle", value: [0x0c, 0x1d], gcode: "None"},
+    {name: "step++", value: [0x0d, 0x1c], gcode: "\n"},
     {name: "model", value: [0x0e, 0x1f]},
     {name: "macro6", value: [0x0f, 0x1e]},
     {name: "macro7", value: [0x10, 0x01]},
-    {name: "stop", value: [0x16, 0x07], tinyg: "!\n%\n"},
-    {name: "reset", value: [0x17, 0x06], tinyg: "None"},
+    {name: "stop", value: [0x16, 0x07], gcode: "!\n%\n"},
+    {name: "reset", value: [0x17, 0x06], gcode: "None"},
 ];
 
 var count = 15;
@@ -3037,9 +3082,9 @@ function getDialSetting(dialByte) {
             return ("Z");
         case(MPG_DIAL_A_AXIS):
             return ("A");
-        case(MPG_DIAL_SPINDLE_DIAL):
+        case(MPG_DIAL_SPINDLE):
             return ("SPINDLE");
-        case(MPG_DIAL_FEED_DIAL):
+        case(MPG_DIAL_FEED):
             return ("FEED");
     }
 }
@@ -3072,29 +3117,46 @@ function doJogContinuous(dialSetting, cmd) {
         calculatedVelocity = tmpCalc; //If we are moving faster than previously we will increase our speed.
     }
     console.log("SANE VELOCITY: " + velocity);
-    cmd.tinyg = "G91\nG1F" + calculatedVelocity + dialSetting + sign + count + "\n";
+    cmd.gcode = "G91\nG1F" + calculatedVelocity + dialSetting + sign + count + "\n";
     return (cmd);
 }
 
 //Incremental Will only single step then stop and wait for another click of the jog dial.
 function doJogIncremental(dialSetting, cmd) {
-    var sign = '';
+    var sign = 1;
     //build our jog command
     //We need to figure out if this is a negative move or a positive move
     if (cmd.value[1] > 0xaa) {
-        sign = "-";
+        sign = -1;
     }
     var feed = 3000;
-    jog([dialSetting, sign + getStepDistance(), feed]);
+    jog({dir: dialSetting, dist: sign * getStepDistance(), feed: feed});
 }
 
 function parseCommand(data) {
     for (var i = 0; i < CMDS.length; i++) {
-        if (data[MPG_CMD_BYTE1] == CMDS[i].value[0] && data[MPG_CMD_BYTE2] == CMDS[i].value[1]) {
+        if (data[MPG_CMD_BYTE1] == CMDS[i].value[0]) { //&& data[MPG_CMD_BYTE2] == CMDS[i].value[1]) {
 
             if (data[MPG_CMD_VELOCITY] != 0x00) {
                 //We got a velocity, Now this is a JOG command vs a Keyup command.
-                return ({name: "jog", value: [0x00, data[MPG_CMD_VELOCITY], 0x9a], tinyg: "G1F100"})
+                var dist = 1;
+                if (data[MPG_CMD_VELOCITY] > 0xaa) {
+                    dist = -1;
+                }
+                var dialSetting = getDialSetting(data[MPG_CMD_DIAL_BYTE]);
+                switch(dialSetting) {
+                    case "DIAL_OFF":
+                        break;
+                    case "SPINDLE":
+                        return ({name: "spindleOverride", value: dist});
+                        break;
+                    case "FEED":
+                        return ({name: "feedOverride", value: dist});
+                        break;
+                    default:
+                        return ({name: "jog", value: [0x00, data[MPG_CMD_VELOCITY], 0x9a], gcode: "G1F100"})
+                        break;
+                }
             }
             return (CMDS[i]);
         }
@@ -3105,29 +3167,34 @@ function parseCommand(data) {
 function parseMPGPacket(data) {
     if (data[MPG_CMD_START_BYTE] == 0x04) { //0x04 is a constant for this device as the first byte
         var dialSetting = getDialSetting(data[MPG_CMD_DIAL_BYTE]);
-        var _tmpCmd = parseCommand(data);
+        var tmpCmd = parseCommand(data);
+        //writeLog(tmpCmd, 3);
 
-        if (_tmpCmd) {
-            console.log("DIAL: " + dialSetting + " Command: " + _tmpCmd.name, " TinyG: " + _tmpCmd.tinyg);
+        if (tmpCmd) {
+            console.log("DIAL: " + dialSetting + " Command: " + tmpCmd.name, " Gcode: " + tmpCmd.gcode);
 
-            switch (_tmpCmd.name) {
+            switch (tmpCmd.name) {
                 case("rewind"):
-                    //io.sockets.emit('rewind', 1);
+                    io.sockets.emit('mpg', {key: 'rewind'});
                     break;
                 
                 case("probez"):
+                    io.sockets.emit('mpg', {key: 'probez'});
                     probe({direction: 'z', probeOffset: 0});
                     break;
                     
                 case("spindle"):
+                    io.sockets.emit('mpg', {key: 'spindle'});
                     laserTest({power: 1, duration: 0});
                     break;
                     
                 case("safez"):
+                    io.sockets.emit('mpg', {key: 'safez'});
                     console.log("safez");
                     break;
                     
                 case("stop"):
+                    io.sockets.emit('mpg', {key: 'stop'});
                     stopMachine();
                     break;
 
@@ -3153,13 +3220,22 @@ function parseMPGPacket(data) {
                     console.log("::-----Entering Jog Mode------::");
                     isJogging = true;
                     if (jogMode == "incremental") {
-                        doJogIncremental(dialSetting, _tmpCmd);
+                        doJogIncremental(dialSetting, tmpCmd);
                     } else {
-                        _tmpCmd = doJogContinuous(dialSetting, _tmpCmd);
+                        tmpCmd = doJogContinuous(dialSetting, tmpCmd);
                     }
                     break;
 
-                case("pause_resume"):
+                case("feedOverride"):
+                    feedOv(tmpCmd.value);
+                    break;
+
+                case("spindleOverride"):
+                    spindleOv(tmpCmd.value);
+                    break;
+
+                case("start_pause"):
+                    io.sockets.emit('mpg', {key: 'start_pause'});
                     if (paused) {
                         console.log("Sending Resume");
                         machineSend('~');
@@ -3170,14 +3246,19 @@ function parseMPGPacket(data) {
                     break;
 
                 case("half"):
+                    io.sockets.emit('mpg', {key: 'half'});
                     console.log("Half");
                     break;
 
                 case("zero"):
                     switch(dialSetting) {
                         case "DIAL_OFF":
+                            break;
                         case "SPINDLE":
+                            spindleOv(0);                            
+                            break;
                         case "FEED":
+                            feedOv(0);                            
                             break;
                         default:
                             setZero(dialSetting.toLowerCase());
@@ -3186,18 +3267,20 @@ function parseMPGPacket(data) {
                     break;
 
                 case("arrow1"):
+                    io.sockets.emit('mpg', {key: 'arrow1'});
                     setZero('all');
                     break;
                     
                 case("arrow2"): //Arrow2 is, at least for now go to zero on all axis
+                    io.sockets.emit('mpg', {key: 'arrow2'});
                     gotoZero('all');
                     break;
 
                 case("step++"):
+                    io.sockets.emit('mpg', {key: 'stepsize'});
                     setStepDistance();
                     var stepSize = getStepDistance();
                     console.log("Changing Step Rate for Incremental Mode to " + stepSize);
-                    io.sockets.emit('stepSize', stepSize);
                     break;
 
                 case("model"):
@@ -3215,36 +3298,42 @@ function parseMPGPacket(data) {
                     break;
 
                 case('reset'):
+                    io.sockets.emit('mpg', {key: 'reset'});
                     resetMachine();
                     break;
                     
                 case("macro1"):
+                    io.sockets.emit('mpg', {key: 'macro1'});
                     console.log("Macro1");
                     runMarco(1);
                     break;
                 
                 case("macro2"):
+                    io.sockets.emit('mpg', {key: 'macro2'});
                     console.log("Macro2");
                     runMarco(2);
                     break;
                     
                 case("macro3"):
+                    io.sockets.emit('mpg', {key: 'macro3'});
                     console.log("Macro3");
                     runMarco(3);
                     break;
 
                 case("macro6"):
+                    io.sockets.emit('mpg', {key: 'macro6'});
                     console.log("Macro6");
                     runMarco(6);
                     break;
                     
                 case("macro7"):
+                    io.sockets.emit('mpg', {key: 'macro7'});
                     console.log("Macro7");
                     runMarco(7);
                     break;
 
                 default:
-                    console.log("Un-Caught Case: " + _tmpCmd.name, _tmpCmd.value);
+                    console.log("Un-Caught Case: " + tmpCmd.name, tmpCmd.value);
                     break;
             }
 
@@ -3253,6 +3342,94 @@ function parseMPGPacket(data) {
 
         }
     }
+}
+
+var hb04_write_data = {
+    /* header of our packet */
+    magic : 0xFDFE,     // 16 bit
+    /* day of the month .. funny i know*/
+    day : 10,           // 8 bit
+    /* work pos */
+    x_wc_int : 0,       // 16 bit
+    x_wc_frac : 0,      // 16 bit
+    y_wc_int : 0,       // 16 bit
+    y_wc_frac : 0,      // 16 bit
+    z_wc_int : 0,       // 16 bit
+    z_wc_frac : 0,      // 16 bit
+    /* machine pos */
+    x_mc_int : 0,       // 16 bit
+    x_mc_frac : 0,      // 16 bit
+    y_mc_int : 0,       // 16 bit
+    y_mc_frac : 0,      // 16 bit
+    z_mc_int : 0,       // 16 bit
+    z_mc_frac : 0,      // 16 bit
+    /* speed */
+    feedrate_ovr : 100, // 16 bit
+    sspeed_ovr : 100,   // 16 bit
+    feedrate : 100,     // 16 bit
+    sspeed : 100,       // 16 bit
+    step_mul : 0x01,    // 8 bit
+    state : 0x01        // 8 bit
+};
+
+function setMpgWPos(pos) {
+    if (mpgType == 1) {
+        hb04_write_data.step_mul = distanceTable[stepDistance];
+
+        hb04_write_data.x_wc_int = parseInt(pos.x);
+        var x_wc_frac = parseInt((pos.x - hb04_write_data.x_wc_int) * 1000);
+        if (pos.x < 0) x_wc_frac = x_wc_frac | 0x8000;
+        hb04_write_data.x_wc_frac = x_wc_frac;
+
+        hb04_write_data.y_wc_int = parseInt(pos.y);
+        var y_wc_frac = parseInt((pos.y - hb04_write_data.y_wc_int) * 1000);
+        if (pos.y < 0) y_wc_frac = y_wc_frac | 0x8000;
+        hb04_write_data.y_wc_frac = y_wc_frac;
+
+        hb04_write_data.z_wc_int = parseInt(pos.z);
+        var z_wc_frac = parseInt((pos.z - hb04_write_data.z_wc_int) * 1000);
+        if (pos.z < 0) z_wc_frac = z_wc_frac | 0x8000;
+        hb04_write_data.z_wc_frac = z_wc_frac;
+
+        writeMPG(hb04_write_data);
+    }
+}
+
+function setMpgMPos(pos) {
+    if (mpgType == 1) {
+        hb04_write_data.step_mul = distanceTable[stepDistance];
+
+        hb04_write_data.x_mc_int = parseInt(pos.x);
+        var x_mc_frac = parseInt((pos.x - hb04_write_data.x_mc_int) * 1000);
+        if (pos.x < 0) x_mc_frac = x_mc_frac | 0x8000;
+        hb04_write_data.x_mc_frac = x_mc_frac;
+
+        hb04_write_data.y_mc_int = parseInt(pos.y);
+        var y_mc_frac = parseInt((pos.y - hb04_write_data.y_mc_int) * 1000);
+        if (pos.y < 0) y_mc_frac = y_mc_frac | 0x8000;
+        hb04_write_data.y_mc_frac = y_mc_frac;
+
+        hb04_write_data.z_mc_int = parseInt(pos.z);
+        var z_mc_frac = parseInt((pos.z - hb04_write_data.z_mc_int) * 1000);
+        if (pos.z < 0) z_mc_frac = z_mc_frac | 0x8000;
+        hb04_write_data.z_mc_frac = z_mc_frac;
+
+        writeMPG(hb04_write_data);
+    }
+}
+
+function setMpgWOffset(pos) {
+    if (mpgType == 1) {
+    }
+}
+
+function writeMPG (data) {
+    mpgWrite.sendFeatureReport([0x06, data.magic >> 8, data.magic & 0xFF, data.day, data.x_wc_int >> 8, data.x_wc_int & 0xFF, data.x_wc_frac >> 8, data.x_wc_frac & 0xFF]);  
+    mpgWrite.sendFeatureReport([0x06, data.y_wc_int >> 8, data.y_wc_int & 0xFF, data.y_wc_frac >> 8,  data.y_wc_frac & 0xFF, data.z_wc_int >> 8, data.z_wc_int & 0xFF, data.z_wc_frac >> 8]);  
+    mpgWrite.sendFeatureReport([0x06, data.z_wc_frac & 0xFF, data.x_mc_int >> 8, data.x_mc_int & 0xFF, data.x_mc_frac >> 8,  data.x_mc_frac & 0xFF, data.y_mc_int >> 8, data.y_mc_int & 0xFF]);  
+    mpgWrite.sendFeatureReport([0x06, data.y_mc_frac >> 8,  data.y_mc_frac & 0xFF, data.z_mc_int >> 8, data.z_mc_int & 0xFF, data.z_mc_frac >> 8, data.z_mc_frac & 0xFF, data.feedrate_ovr >> 8]);  
+    mpgWrite.sendFeatureReport([0x06, data.feedrate_ovr & 0xFF, data.sspeed_ovr >> 8, data.sspeed_ovr & 0xFF, data.feedrate >> 8, data.feedrate & 0xFF, data.sspeed >> 8, data.sspeed & 0xFF]);  
+    mpgWrite.sendFeatureReport([0x06, data.step_mul,  data.state, 0, 0, 0, 0, 0]);
 }
 
 
