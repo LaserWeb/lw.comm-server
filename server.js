@@ -2530,6 +2530,8 @@ io.sockets.on('connection', function (appSocket) {
                 case 'smoothie':
                     machineSend('$X\n');
                     writeLog('Sent: $X', 2);
+                    machineSend('~\n');
+                    writeLog('Sent: ~', 2);
                     break;
                 case 'tinyg':
                     machineSend('$X\n');
@@ -2565,6 +2567,8 @@ io.sockets.on('connection', function (appSocket) {
                 case 'smoothie':
                     machineSend('$X\n'); //M999
                     writeLog('Sent: $X', 2);
+                    machineSend('~\n');
+                    writeLog('Sent: ~', 2);
                     blocked = false;
                     paused = false;
                     break;
