@@ -162,16 +162,28 @@ if (mpgType == 1){
             } else {
                 mpgWrite = new HID.HID(device.path);
                 console.log("HID write device: " + device.path);
+                console.log(mpgWrite.getFeatureReport(6, 8));
             }
         }
     });
 
     mpgRead.on("data", function (data) {
-        writeLog(chalk.yellow('MPG: ' + JSON.stringify(data)), 1);
+        writeLog(chalk.yellow('MPG read data: ' + JSON.stringify(data)), 1);
         if (data) {
             parseMPGPacket(data);
         }
     });
+    mpgRead.on("error", function (data) {
+        writeLog(chalk.yellow('MPG read error: ' + JSON.stringify(data)), 1);
+    });
+    
+    mpgWrite.on("data", function (data) {
+        writeLog(chalk.yellow('MPG write data: ' + JSON.stringify(data)), 1);
+    });
+    mpgWrite.on("error", function (data) {
+        writeLog(chalk.yellow('MPG write error: ' + JSON.stringify(data)), 1);
+    });
+
 }
 
 
@@ -2750,6 +2762,8 @@ function clearAlarm(data) {
             case 'smoothie':
                 machineSend('$X\n');
                 writeLog('Sent: $X', 2);
+                machineSend('~\n');
+                writeLog('Sent: ~', 2);
                 break;
             case 'tinyg':
                 machineSend('$X\n');
@@ -2785,6 +2799,8 @@ function clearAlarm(data) {
             case 'smoothie':
                 machineSend('$X\n'); //M999
                 writeLog('Sent: $X', 2);
+                machineSend('~\n');
+                writeLog('Sent: ~', 2);
                 blocked = false;
                 paused = false;
                 break;
@@ -3064,11 +3080,12 @@ var count = 15;
 var isJogging = false;
 var jogMode = "incremental"; //vs "continuous"
 var units = "mm";
-var stepDistance = 0;
+var stepDistance = 1;
 var jogVelocityMultiplier = 1;
 var velocityMin = 40; //mm/min
 var calculatedVelocity = velocityMin;
-var distanceTable = [1, 10, 100, 0.01, 0.1];
+var distanceTable = [10, 1, 0.1, 0.01];
+var stepMulTable = [0x0A, 0x08, 0x03, 0x01]
 
 function getDialSetting(dialByte) {
     switch (dialByte) {
@@ -3095,7 +3112,7 @@ function getStepDistance(){
 
 function setStepDistance() {
     stepDistance = stepDistance + 1;
-    if (stepDistance == 5) {
+    if (stepDistance == 4) {
         stepDistance = 0;
     }
 }
@@ -3346,9 +3363,9 @@ function parseMPGPacket(data) {
 
 var hb04_write_data = {
     /* header of our packet */
-    magic : 0xFDFE,     // 16 bit
-    /* day of the month .. funny i know*/
-    day : 10,           // 8 bit
+    magic1 : 0xFE,      // 8 bit
+    magic2 : 0xFD,      // 8 bit
+    day : 0x0C,         // 8 bit
     /* work pos */
     x_wc_int : 0,       // 16 bit
     x_wc_frac : 0,      // 16 bit
@@ -3356,6 +3373,8 @@ var hb04_write_data = {
     y_wc_frac : 0,      // 16 bit
     z_wc_int : 0,       // 16 bit
     z_wc_frac : 0,      // 16 bit
+    a_wc_int : 0,       // 16 bit
+    a_wc_frac : 0,      // 16 bit
     /* machine pos */
     x_mc_int : 0,       // 16 bit
     x_mc_frac : 0,      // 16 bit
@@ -3363,6 +3382,8 @@ var hb04_write_data = {
     y_mc_frac : 0,      // 16 bit
     z_mc_int : 0,       // 16 bit
     z_mc_frac : 0,      // 16 bit
+    a_mc_int : 0,       // 16 bit
+    a_mc_frac : 0,      // 16 bit
     /* speed */
     feedrate_ovr : 100, // 16 bit
     sspeed_ovr : 100,   // 16 bit
@@ -3374,20 +3395,20 @@ var hb04_write_data = {
 
 function setMpgWPos(pos) {
     if (mpgType == 1) {
-        hb04_write_data.step_mul = distanceTable[stepDistance];
+        hb04_write_data.step_mul = stepMulTable[stepDistance];
 
-        hb04_write_data.x_wc_int = parseInt(pos.x);
-        var x_wc_frac = parseInt((pos.x - hb04_write_data.x_wc_int) * 1000);
+        hb04_write_data.x_wc_int = parseInt(Math.abs(pos.x));
+        var x_wc_frac = parseInt((Math.abs(pos.x) - hb04_write_data.x_wc_int) * 10000);
         if (pos.x < 0) x_wc_frac = x_wc_frac | 0x8000;
         hb04_write_data.x_wc_frac = x_wc_frac;
 
-        hb04_write_data.y_wc_int = parseInt(pos.y);
-        var y_wc_frac = parseInt((pos.y - hb04_write_data.y_wc_int) * 1000);
+        hb04_write_data.y_wc_int = parseInt(Math.abs(pos.y));
+        var y_wc_frac = parseInt((Math.abs(pos.y) - hb04_write_data.y_wc_int) * 10000);
         if (pos.y < 0) y_wc_frac = y_wc_frac | 0x8000;
         hb04_write_data.y_wc_frac = y_wc_frac;
 
-        hb04_write_data.z_wc_int = parseInt(pos.z);
-        var z_wc_frac = parseInt((pos.z - hb04_write_data.z_wc_int) * 1000);
+        hb04_write_data.z_wc_int = parseInt(Math.abs(pos.z));
+        var z_wc_frac = parseInt((Math.abs(pos.z) - hb04_write_data.z_wc_int) * 10000);
         if (pos.z < 0) z_wc_frac = z_wc_frac | 0x8000;
         hb04_write_data.z_wc_frac = z_wc_frac;
 
@@ -3397,20 +3418,20 @@ function setMpgWPos(pos) {
 
 function setMpgMPos(pos) {
     if (mpgType == 1) {
-        hb04_write_data.step_mul = distanceTable[stepDistance];
+        hb04_write_data.step_mul = stepMulTable[stepDistance];
 
-        hb04_write_data.x_mc_int = parseInt(pos.x);
-        var x_mc_frac = parseInt((pos.x - hb04_write_data.x_mc_int) * 1000);
+        hb04_write_data.x_mc_int = parseInt(Math.abs(pos.x));
+        var x_mc_frac = parseInt((Math.abs(pos.x) - hb04_write_data.x_mc_int) * 10000);
         if (pos.x < 0) x_mc_frac = x_mc_frac | 0x8000;
         hb04_write_data.x_mc_frac = x_mc_frac;
 
-        hb04_write_data.y_mc_int = parseInt(pos.y);
-        var y_mc_frac = parseInt((pos.y - hb04_write_data.y_mc_int) * 1000);
+        hb04_write_data.y_mc_int = parseInt(Math.abs(pos.y));
+        var y_mc_frac = parseInt((Math.abs(pos.y) - hb04_write_data.y_mc_int) * 10000);
         if (pos.y < 0) y_mc_frac = y_mc_frac | 0x8000;
         hb04_write_data.y_mc_frac = y_mc_frac;
 
-        hb04_write_data.z_mc_int = parseInt(pos.z);
-        var z_mc_frac = parseInt((pos.z - hb04_write_data.z_mc_int) * 1000);
+        hb04_write_data.z_mc_int = parseInt(Math.abs(pos.z));
+        var z_mc_frac = parseInt((Math.abs(pos.z) - hb04_write_data.z_mc_int) * 10000);
         if (pos.z < 0) z_mc_frac = z_mc_frac | 0x8000;
         hb04_write_data.z_mc_frac = z_mc_frac;
 
@@ -3423,14 +3444,30 @@ function setMpgWOffset(pos) {
     }
 }
 
-function writeMPG (data) {
-    mpgWrite.sendFeatureReport([0x06, data.magic >> 8, data.magic & 0xFF, data.day, data.x_wc_int >> 8, data.x_wc_int & 0xFF, data.x_wc_frac >> 8, data.x_wc_frac & 0xFF]);  
-    mpgWrite.sendFeatureReport([0x06, data.y_wc_int >> 8, data.y_wc_int & 0xFF, data.y_wc_frac >> 8,  data.y_wc_frac & 0xFF, data.z_wc_int >> 8, data.z_wc_int & 0xFF, data.z_wc_frac >> 8]);  
-    mpgWrite.sendFeatureReport([0x06, data.z_wc_frac & 0xFF, data.x_mc_int >> 8, data.x_mc_int & 0xFF, data.x_mc_frac >> 8,  data.x_mc_frac & 0xFF, data.y_mc_int >> 8, data.y_mc_int & 0xFF]);  
-    mpgWrite.sendFeatureReport([0x06, data.y_mc_frac >> 8,  data.y_mc_frac & 0xFF, data.z_mc_int >> 8, data.z_mc_int & 0xFF, data.z_mc_frac >> 8, data.z_mc_frac & 0xFF, data.feedrate_ovr >> 8]);  
-    mpgWrite.sendFeatureReport([0x06, data.feedrate_ovr & 0xFF, data.sspeed_ovr >> 8, data.sspeed_ovr & 0xFF, data.feedrate >> 8, data.feedrate & 0xFF, data.sspeed >> 8, data.sspeed & 0xFF]);  
-    mpgWrite.sendFeatureReport([0x06, data.step_mul,  data.state, 0, 0, 0, 0, 0]);
+function writeMPG(data) {
+    writeLog('WX:' + data.x_wc_int + '.' + data.x_wc_frac + ', WY:' + data.y_wc_int + '.' + data.y_wc_frac + ', WZ:' + data.z_wc_int + '.' + data.z_wc_frac, 3);
+    //console.log(JSON.stringify(data));
+    var part1 = [6, data.magic1, data.magic2, data.day, data.x_wc_int & 0xFF, data.x_wc_int >> 8, data.x_wc_frac & 0xFF, data.x_wc_frac >> 8];
+    writeLog(JSON.stringify(part1), 3);
+    var part2 = [6, data.y_wc_int & 0xFF, data.y_wc_int >> 8, data.y_wc_frac & 0xFF, data.y_wc_frac >> 8, data.z_wc_int & 0xFF, data.z_wc_int >> 8, data.z_wc_frac & 0xFF];
+    writeLog(JSON.stringify(part2), 3);
+    var part3 = [6, data.z_wc_frac >> 8, data.x_mc_int & 0xFF, data.x_mc_int >> 8, data.x_mc_frac & 0xFF, data.x_mc_frac >> 8, data.y_mc_int & 0xFF, data.y_mc_int >> 8];
+    writeLog(JSON.stringify(part3), 3);
+    var part4 = [6, data.y_mc_frac & 0xFF, data.y_mc_frac >> 8, data.z_mc_int & 0xFF, data.z_mc_int >> 8, data.z_mc_frac & 0xFF, data.z_mc_frac >> 8, data.feedrate_ovr & 0xFF];
+    writeLog(JSON.stringify(part4), 3);
+    var part5 = [6, data.feedrate_ovr >> 8, data.sspeed_ovr & 0xFF, data.sspeed_ovr >> 8, data.feedrate & 0xFF, data.feedrate >> 8, data.sspeed & 0xFF, data.sspeed >> 8];
+    writeLog(JSON.stringify(part5), 3);
+    var part6 = [6, data.step_mul, 0, 0, 0, 0, 0, 0]; //data.state
+    writeLog(JSON.stringify(part6), 3);
+    
+    mpgWrite.sendFeatureReport(part1);
+    mpgWrite.sendFeatureReport(part2);  
+    mpgWrite.sendFeatureReport(part3);  
+    mpgWrite.sendFeatureReport(part4);  
+    mpgWrite.sendFeatureReport(part5);  
+    mpgWrite.sendFeatureReport(part6);
 }
+
 
 
 function isElectron() {
