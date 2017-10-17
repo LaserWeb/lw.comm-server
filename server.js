@@ -152,38 +152,41 @@ var io = websockets.listen(app);
 
 
 // MPG communication
-if (mpgType == 1){
-    var devices = HID.devices();
-    devices.forEach(function(device) {
-        if (device.vendorId == vendorId && device.productId == productId){
-            if (!mpgRead) {
-                mpgRead = new HID.HID(device.path);
-                console.log("HID read device: " + device.path);
-            } else {
-                mpgWrite = new HID.HID(device.path);
-                console.log("HID write device: " + device.path);
-                console.log(mpgWrite.getFeatureReport(6, 8));
+if (mpgType != 0){
+    switch(mpgType){
+    case 'HB03':
+    case 'HB04':
+        var devices = HID.devices();
+        devices.forEach(function(device) {
+            if (device.vendorId == vendorId && device.productId == productId){
+                if (!mpgRead) {
+                    mpgRead = new HID.HID(device.path);
+                    console.log("HID read device: " + device.path);
+                } else {
+                    mpgWrite = new HID.HID(device.path);
+                    console.log("HID write device: " + device.path);
+                    console.log(mpgWrite.getFeatureReport(6, 8));
+                }
             }
-        }
-    });
+        });
+        mpgRead.on("data", function (data) {
+            writeLog(chalk.yellow('MPG read data: ' + JSON.stringify(data)), 1);
+            if (data) {
+                parseMPGPacket(data);
+            }
+        });
+        mpgRead.on("error", function (data) {
+            writeLog(chalk.yellow('MPG read error: ' + JSON.stringify(data)), 1);
+        });
 
-    mpgRead.on("data", function (data) {
-        writeLog(chalk.yellow('MPG read data: ' + JSON.stringify(data)), 1);
-        if (data) {
-            parseMPGPacket(data);
-        }
-    });
-    mpgRead.on("error", function (data) {
-        writeLog(chalk.yellow('MPG read error: ' + JSON.stringify(data)), 1);
-    });
-    
-    mpgWrite.on("data", function (data) {
-        writeLog(chalk.yellow('MPG write data: ' + JSON.stringify(data)), 1);
-    });
-    mpgWrite.on("error", function (data) {
-        writeLog(chalk.yellow('MPG write error: ' + JSON.stringify(data)), 1);
-    });
-
+        mpgWrite.on("data", function (data) {
+            writeLog(chalk.yellow('MPG write data: ' + JSON.stringify(data)), 1);
+        });
+        mpgWrite.on("error", function (data) {
+            writeLog(chalk.yellow('MPG write error: ' + JSON.stringify(data)), 1);
+        });
+        break;
+    }
 }
 
 
@@ -363,7 +366,7 @@ io.sockets.on('connection', function (appSocket) {
                     }, config.grblWaitTime * 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
-                            // Close port if we don't detect supported firmware after 2s.
+                            // Close port if we don't detect supported firmware after firmwareWaitTime.
                             if (!firmware) {
                                 writeLog('No supported firmware detected. Closing port ' + port.path, 1);
                                 io.sockets.emit('data', 'No supported firmware detected. Closing port ' + port.path);
@@ -424,6 +427,20 @@ io.sockets.on('connection', function (appSocket) {
                         send1Q();
                     } else if (data.indexOf('<') === 0) { // Got statusReport (Grbl & Smoothieware)
                         var state = data.substring(1, data.search(/(,|\|)/));
+                        if (state === 'idle' && queueCount > 0) {
+                            // firmware idle but queue not empty and not paused -> missed some ok's -> unblock queue
+                            switch (firmware) {
+                            case 'grbl':
+                                grblBufferSize.shift();
+                                break;
+                            case 'repetier':
+                            case 'marlinkimbra':
+                                reprapBufferSize++;
+                                break;
+                            }
+                            blocked = false;
+                            send1Q();
+                        }
                         //appSocket.emit('runStatus', state);
                         io.sockets.emit('data', data);
                         if (firmware == 'grbl') {
