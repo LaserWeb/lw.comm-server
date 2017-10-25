@@ -300,7 +300,7 @@ io.sockets.on('connection', function (appSocket) {
                         machineSend('\n'); // this causes smoothie to send the welcome string
                     }
                     setTimeout(function () { //wait for controller to be ready
-                        if (!firmware) { // Grbl should be allready detected
+                        if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
@@ -846,7 +846,7 @@ io.sockets.on('connection', function (appSocket) {
                     connectedTo = connectedIp;
 
                     setTimeout(function () { //wait for controller to be ready
-                        if (!firmware) { // Grbl should be allready detected
+                        if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
@@ -1257,7 +1257,7 @@ io.sockets.on('connection', function (appSocket) {
                     //machineSend(String.fromCharCode(0x18));
 
                     setTimeout(function () { //wait for controller to be ready
-                        if (!firmware) { // Grbl should be allready detected
+                        if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
