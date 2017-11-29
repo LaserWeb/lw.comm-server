@@ -1752,6 +1752,10 @@ io.sockets.on('connection', function (appSocket) {
                         io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
                     }, 500);
                     io.sockets.emit('runStatus', 'running');
+					
+					//NAB - Added to support action to run befor job starts
+                    doJobAction(config.jobOnStart);
+					
                     send1Q();
                 }
             }
@@ -2508,6 +2512,10 @@ io.sockets.on('connection', function (appSocket) {
             blocked = false;
             paused = false;
             io.sockets.emit('runStatus', 'stopped');
+			
+			//NAB - Added to support action to run after job aborts
+            doJobAction(config.jobOnAbort);
+			
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -2849,6 +2857,9 @@ function send1Q() {
             startTime = null;
             runningJob = null;
             io.sockets.emit('runStatus', 'finished');
+			
+			//NAB - Added to support action to run after job completes
+            doJobAction(config.jobOnFinish);			
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
@@ -2894,4 +2905,21 @@ function writeLog(line, verb) {
         line = line.split(String.fromCharCode(0x1B) + '[94m').join('');
         logFile.write(time + ' ' + line + '\r\n');
     }
+}
+
+//Handles performing any pre/post/abort actions
+//Action = command line specific for OS
+function doJobAction(action) {
+
+    //NAB - Added to support action to run after job completes
+    if (typeof action === 'string' && action.length > 0) {
+        try {
+            exec(action);
+        } catch (e) {
+            //Unable to start jobAfter command
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Error on job command: ' + e.message + ' for action: ' + action), 2);
+        }
+
+    }
+
 }
