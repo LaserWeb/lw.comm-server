@@ -41,6 +41,7 @@ const chalk = require('chalk');
 const request = require('request'); // proxy for remote webcams
 const grblStrings = require('./grblStrings.js');
 const firmwareFeatures = require('./firmwareFeatures.js');
+const { exec } = require('child_process'); //Support for running OS commands before and after jobs
 
 //var EventEmitter = require('events').EventEmitter;
 //var qs = require('querystring');
