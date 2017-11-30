@@ -16,4 +16,8 @@ config.grblWaitTime = process.env.GRBL_WAIT_TIME || 1;
 config.smoothieWaitTime = process.env.SMOOTHIE_WAIT_TIME || 1;
 config.tinygWaitTime = process.env.TINYG_WAIT_TIME || 1;
 
+config.jobOnStart = '';
+config.jobOnFinish = '';
+config.jobOnAbort = '';
+
 module.exports = config;
