@@ -65,6 +65,22 @@ var featuresMarlinkimbra = {
     aAxes: false
 };
 
+var featuresMarlin = {
+    pause: true,
+    resume: true,
+    stop: true,
+    reset: true,
+    home: true,
+    disableMotors: true,
+    feedOverride: false,
+    spindleOverride: false,
+    dynamicPwmM4: false,
+    xAxes: true,
+    yAxes: true,
+    zAxes: true,
+    aAxes: false
+};
+
 var featuresRepetier = {
     pause: true,
     resume: true,
@@ -107,6 +123,8 @@ exports.get = function (firmware) {
             return featuresTyinG;
         case 'marlinkimbra':
             return featuresMarlinkimbra;
+        case 'marlin':
+            return featuresMarlin;
         case 'repetier':
             return featuresRepetier;
         default:
