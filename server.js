@@ -42,6 +42,7 @@ const chalk = require('chalk');
 const request = require('request'); // proxy for remote webcams
 const grblStrings = require('./grblStrings.js');
 const firmwareFeatures = require('./firmwareFeatures.js');
+const { exec } = require('child_process'); //Support for running OS commands before and after jobs
 
 //var EventEmitter = require('events').EventEmitter;
 //var qs = require('querystring');
@@ -316,7 +317,7 @@ io.sockets.on('connection', function (appSocket) {
                         machineSend('\n'); // this causes smoothie to send the welcome string
                     }
                     setTimeout(function () { //wait for controller to be ready
-                        if (!firmware) { // Grbl should be allready detected
+                        if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
@@ -352,7 +353,7 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }, config.firmwareWaitTime * 1000);
                     }
-                    // machineSend("M115\n");    // Lets check if its Marlin?
+                    //machineSend("M115\n");    // Lets check if its Marlin?
 
                     writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
                     isConnected = true;
@@ -390,7 +391,7 @@ io.sockets.on('connection', function (appSocket) {
                         if (firmware === 'grbl') {
                             grblBufferSize.shift();
                         }
-                        if (firmware === 'repetier' || firmware === 'marlinkimbra') {
+                        if (firmware === 'repetier' || firmware === 'marlinkimbra' || firmware === 'marlin') {
                             reprapBufferSize++;
                         }
                         blocked = false;
@@ -644,7 +645,25 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }, 250);
-                    } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
+                    } else if (data.indexOf('FIRMWARE_NAME:Marlin') >= 0) { // Check if it's MarlinKimbra
+                        firmware = 'marlin';
+                        var startPos = data.search(/mk_/i) + 3;
+                        fVersion = data.substr(startPos, 5); // get version
+                        fDate = '';
+                        writeLog('Marlin detected (' + fVersion + ')', 1);
+                        io.sockets.emit('firmware', { firmware: firmware, version: fVersion, date: fDate });
+                        // Start intervall for status queries
+                        statusLoop = setInterval(function () {
+                            if (isConnected) {
+                                if (!reprapWaitForPos && reprapBufferSize >= 0) {
+                                    reprapWaitForPos = true;
+                                    machineSend('M114\n'); // query position
+                                    reprapBufferSize--;
+                                    writeLog('Sent: M114 (B' + reprapBufferSize + ')', 2);
+                                }
+                            }
+                        }, 250);
+                    }else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
                         firmware = 'marlinkimbra';
                         var startPos = data.search(/mk_/i) + 3;
                         fVersion = data.substr(startPos, 5); // get version
@@ -807,6 +826,7 @@ io.sockets.on('connection', function (appSocket) {
                             io.sockets.emit('data', data);
                             break;
                         case 'marlinkimbra':
+                        case 'marlin':
                             io.sockets.emit('data', data);
                             break;
                         }
@@ -817,6 +837,7 @@ io.sockets.on('connection', function (appSocket) {
                         case 'repetier':
                             break;
                         case 'marlinkimbra':
+                        case 'marlin':
                             break;
                         }
                     } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
@@ -837,6 +858,7 @@ io.sockets.on('connection', function (appSocket) {
                             io.sockets.emit('data', data);
                             break;
                         case 'marlinkimbra':
+                        case 'marlin':
                             io.sockets.emit('data', data);
                             break;
                         }
@@ -862,7 +884,7 @@ io.sockets.on('connection', function (appSocket) {
                     connectedTo = connectedIp;
 
                     setTimeout(function () { //wait for controller to be ready
-                        if (!firmware) { // Grbl should be allready detected
+                        if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
@@ -949,7 +971,7 @@ io.sockets.on('connection', function (appSocket) {
                             if (firmware === 'grbl') {
                                 grblBufferSize.shift();
                             }
-                            if (firmware === 'repetier' || firmware === 'marlinkimbra') {
+                            if (firmware === 'repetier' || firmware === 'marlinkimbra' || firmware === 'marlin') {
                                 reprapBufferSize++;
                             }
                             blocked = false;
@@ -1213,6 +1235,7 @@ io.sockets.on('connection', function (appSocket) {
                                 io.sockets.emit('data', data);
                                 break;
                             case 'marlinkimbra':
+                            case 'marlin':
                                 io.sockets.emit('data', data);
                                 break;
                             }
@@ -1223,6 +1246,7 @@ io.sockets.on('connection', function (appSocket) {
                             case 'repetier':
                                 break;
                             case 'marlinkimbra':
+                            case 'marlin':
                                 break;
                             }
                         } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
@@ -1243,6 +1267,7 @@ io.sockets.on('connection', function (appSocket) {
                                 io.sockets.emit('data', data);
                                 break;
                             case 'marlinkimbra':
+                            case 'marlin':
                                 io.sockets.emit('data', data);
                                 break;
                             }
@@ -1273,7 +1298,7 @@ io.sockets.on('connection', function (appSocket) {
                     //machineSend(String.fromCharCode(0x18));
 
                     setTimeout(function () { //wait for controller to be ready
-                        if (!firmware) { // Grbl should be allready detected
+                        if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
                             writeLog('Sent: version', 2);
                             setTimeout(function () {  // Wait for Smoothie to answer
@@ -1660,6 +1685,7 @@ io.sockets.on('connection', function (appSocket) {
                                     io.sockets.emit('data', data);
                                     break;
                                 case 'marlinkimbra':
+                                case 'marlin':
                                     io.sockets.emit('data', data);
                                     break;
                                 }
@@ -1670,6 +1696,7 @@ io.sockets.on('connection', function (appSocket) {
                                 case 'repetier':
                                     break;
                                 case 'marlinkimbra':
+                                case 'marlin':
                                     break;
                                 }
                             } else if (data.indexOf('error') === 0) { // Error received -> stay blocked stops queue
@@ -1690,6 +1717,7 @@ io.sockets.on('connection', function (appSocket) {
                                     io.sockets.emit('data', data);
                                     break;
                                 case 'marlinkimbra':
+                                case 'marlin':
                                     io.sockets.emit('data', data);
                                     break;
                                 }
@@ -1783,6 +1811,10 @@ io.sockets.on('connection', function (appSocket) {
                         io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
                     }, 500);
                     io.sockets.emit('runStatus', 'running');
+					
+					//NAB - Added to support action to run befor job starts
+                    doJobAction(config.jobOnStart);
+					
                     send1Q();
                 }
             }
@@ -1872,7 +1904,13 @@ io.sockets.on('connection', function (appSocket) {
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G91');
-                    addQ('G0' + feed + dir + dist);
+                    addQ('G0 ' + feed + dir + dist);
+                    addQ('G90');
+                    send1Q();
+                    break;
+                case 'marlin':
+                    addQ('G91');
+                    addQ('G0 ' + feed +" "+ dir +" "+ dist);
                     addQ('G90');
                     send1Q();
                     break;
@@ -1924,6 +1962,12 @@ io.sockets.on('connection', function (appSocket) {
                     addQ('G90');
                     send1Q();
                     break;
+                case 'marlin':
+                    addQ('G9' + mode);
+                    addQ('G0 ' + feed +" "+ xVal +" "+ yVal +" "+ zVal);
+                    addQ('G90');
+                    send1Q();
+                    break;
                 default:
                     writeLog(chalk.red('ERROR: ') + chalk.blue('Unknown firmware!'), 1);
                     break;
@@ -1944,16 +1988,28 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             switch (data) {
             case 'x':
-                addQ('G10 L20 P0 X0');
+                if (firmware == "marlin")
+                    addQ('G92 X0');
+                else
+                    addQ('G10 L20 P0 X0');
                 break;
             case 'y':
-                addQ('G10 L20 P0 Y0');
+                if (firmware == "marlin")
+                    addQ('G92 Y0');
+                else
+                    addQ('G10 L20 P0 Y0');
                 break;
             case 'z':
-                addQ('G10 L20 P0 Z0');
+                if (firmware == "marlin")
+                    addQ('G92 Z0');
+                else
+                    addQ('G10 L20 P0 Z0');
                 break;
             case 'a':
-                addQ('G10 L20 P0 A0');
+                if (firmware == "marlin")
+                    addQ('G92 E0');
+                else
+                    addQ('G10 L20 P0 A0');
                 break;
             case 'all':
                 switch (firmware) {
@@ -1961,6 +2017,7 @@ io.sockets.on('connection', function (appSocket) {
                     addQ('G92');
                     break;
                 case 'marlinkimbra':
+                case 'marlin':
                     addQ('G92 X0 Y0 Z0');
                     break;
                 default:
@@ -1969,7 +2026,10 @@ io.sockets.on('connection', function (appSocket) {
                 }
                 break;
             case 'xyza':
-                addQ('G10 L20 P0 X0 Y0 Z0 A0');
+                if (firmware == "marlin")
+                    addQ('G92 X0 Y0 Z0 E0');
+                else
+                    addQ('G10 L20 P0 X0 Y0 Z0 A0');
                 break;
             }
             send1Q();
@@ -2040,6 +2100,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'marlinkimbra':
                     addQ('G28.2 X');
                     break;
+                case 'marlin':
+                    addQ('G28 X');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2052,6 +2115,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 Y');
+                    break;
+                case 'marlin':
+                    addQ('G28 Y');
                     break;
                 default:
                     //not supported
@@ -2066,6 +2132,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'marlinkimbra':
                     addQ('G28.2 Z');
                     break;
+                case 'marlin':
+                    addQ('G28 Z');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2078,6 +2147,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 E1');
+                    break;
+                case 'marlin':
+                    addQ('G28 E1'); // ????
                     break;
                 default:
                     //not supported
@@ -2095,6 +2167,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'marlinkimbra':
                     addQ('G28.2 X Y Z');
                     break;
+                case 'marlin':
+                    addQ('G28 X Y Z');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2110,6 +2185,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'repetier':
                 case 'marlinkimbra':
                     addQ('G28.2 X Y Z E');
+                    break;
+                case 'marlin':
+                    addQ('G28 X Y Z E');
                     break;
                 default:
                     //not supported
@@ -2387,6 +2465,22 @@ io.sockets.on('connection', function (appSocket) {
                             }
                             send1Q();
                             break;
+                        case 'marlin':
+                            addQ('G1 F1');
+                            addQ('M106 S' + parseInt(power * maxS / 100));
+                            laserTestOn = true;
+                            appSocket.emit('laserTest', power);
+                            if (duration > 0) {
+                                addQ('G4 P' + duration / 1000);
+                                addQ('M107');
+                                laserTestOn = false;
+                                setTimeout(function () {
+                                    laserTestOn = false;
+                                    appSocket.emit('laserTest', 0);
+                                }, duration);
+                            }
+                            send1Q();
+                            break;
                         }
                     }
                 } else {
@@ -2408,6 +2502,10 @@ io.sockets.on('connection', function (appSocket) {
                     case 'repetier':
                     case 'marlinkimbra':
                         addQ('M5');
+                        send1Q();
+                        break;
+                    case 'marlin':
+                        addQ('M107');
                         send1Q();
                         break;
                     }
@@ -2446,6 +2544,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'repetier':
             case 'marlinkimbra':
+            case 'marlin':
                 // just stop sending gcodes
                 break;
             }
@@ -2477,6 +2576,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'repetier':
             case 'marlinkimbra':
+            case 'marlin':
                 break;
             }
             paused = false;
@@ -2538,6 +2638,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'repetier':
             case 'marlinkimbra':
+            case 'marlin':
                 paused = true;
                 machineSend('M112/n'); // hold
                 writeLog('Sent: M112', 2);
@@ -2559,6 +2660,10 @@ io.sockets.on('connection', function (appSocket) {
             blocked = false;
             paused = false;
             io.sockets.emit('runStatus', 'stopped');
+			
+			//NAB - Added to support action to run after job aborts
+            doJobAction(config.jobOnAbort);
+			
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -2590,6 +2695,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 case 'repetier':
                 case 'marlinkimbra':
+                case 'marlin':
                     machineSend('M112\n');
                     writeLog('Sent: M112', 2);
                     break;
@@ -2633,7 +2739,8 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 case 'repetier':
                 case 'marlinkimbra':
-                    machineSend('M112/b');
+                case 'marlin':
+                    machineSend('M112/n');
                     writeLog('Sent: M112', 2);
                     blocked = false;
                     paused = false;
@@ -2667,6 +2774,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'repetier':
             case 'marlinkimbra':
+            case 'marlin':
                 machineSend('M112/n');
                 writeLog('Sent: M112', 2);
                 break;
@@ -2860,6 +2968,7 @@ function send1Q() {
             break;
         case 'repetier':
         case 'marlinkimbra':
+        case 'marlin':
             while (reprapBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
                 gcode = gcodeQueue.shift();
                 machineSend(gcode + '\n');
@@ -2900,6 +3009,9 @@ function send1Q() {
             startTime = null;
             runningJob = null;
             io.sockets.emit('runStatus', 'finished');
+			
+			//NAB - Added to support action to run after job completes
+            doJobAction(config.jobOnFinish);			
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
@@ -2946,6 +3058,25 @@ function writeLog(line, verb) {
         logFile.write(time + ' ' + line + '\r\n');
     }
 }
+
+//Handles performing any pre/post/abort actions
+//Action = command line specific for OS
+function doJobAction(action) {
+
+    //NAB - Added to support action to run after job completes
+    if (typeof action === 'string' && action.length > 0) {
+        try {
+            exec(action);
+        } catch (e) {
+            //Unable to start jobAfter command
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Error on job command: ' + e.message + ' for action: ' + action), 2);
+        }
+
+    }
+
+
+}
+
 
 
 // Electron app
