@@ -2336,7 +2336,6 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('laserTest', function (data) { // Laser Test Fire
-        console.log("receive laserTest");
         if (isConnected) {
             data = data.split(',');
             var power = parseFloat(data[0]);
@@ -2494,7 +2493,7 @@ io.sockets.on('connection', function (appSocket) {
                 break;
             case 'repetier':
             case 'marlinkimbra':
-            case 'marlink':
+            case 'marlin':
                 // just stop sending gcodes
                 break;
             }
