@@ -34,6 +34,7 @@ const WebSocket = require('ws');
 const net = require('net');
 const os = require('os');
 const fs = require('fs');
+const path = require('path');
 const nstatic = require('node-static');
 const url = require('url');
 const util = require('util');
@@ -116,7 +117,7 @@ require('dns').lookup(require('os').hostname(), function (err, add, fam) {
 
 
 // Init webserver
-var webServer = new nstatic.Server('./app');
+var webServer = new nstatic.Server(path.join(__dirname, '/app'));
 var app = http.createServer(function (req, res) {
     var queryData = url.parse(req.url, true).query;
     if (queryData.url) {
