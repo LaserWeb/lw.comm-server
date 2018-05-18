@@ -2,4 +2,4 @@
 
 cd /laserweb
 
-nice -n -20 npm start
+nice -n -20 node server.js
