@@ -119,7 +119,7 @@ require('dns').lookup(require('os').hostname(), function (err, add, fam) {
 
 
 // Init webserver
-var webServer = new nstatic.Server(path.join(__dirname, '/app'));
+var webServer = new nstatic.Server(config.uipath | path.join(__dirname, '/app'));
 var app = http.createServer(function (req, res) {
     var queryData = url.parse(req.url, true).query;
     if (queryData.url) {
