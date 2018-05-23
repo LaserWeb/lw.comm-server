@@ -1,4 +1,5 @@
-require('dotenv').load({ silent: true });
+require('dotenv').load({silent: true});
+const path = require('path');
 
 var config = {};
 
@@ -19,5 +20,7 @@ config.tinygWaitTime = process.env.TINYG_WAIT_TIME || 1;
 config.jobOnStart = '';
 config.jobOnFinish = '';
 config.jobOnAbort = '';
+
+config.uipath = path.join(__dirname, '/app')
 
 module.exports = config;
