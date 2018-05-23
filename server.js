@@ -44,6 +44,8 @@ const grblStrings = require('./grblStrings.js');
 const firmwareFeatures = require('./firmwareFeatures.js');
 const { exec } = require('child_process'); //Support for running OS commands before and after jobs
 
+exports.LWCommServer=function(config){
+
 //var EventEmitter = require('events').EventEmitter;
 //var qs = require('querystring');
 
@@ -3024,4 +3026,10 @@ function doJobAction(action) {
 
     }
 
+}
+
+}
+
+if (require.main === module) { 
+    exports.LWCommServer(config); 
 }
