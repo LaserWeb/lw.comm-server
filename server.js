@@ -44,6 +44,8 @@ const grblStrings = require('./grblStrings.js');
 const firmwareFeatures = require('./firmwareFeatures.js');
 const { exec } = require('child_process'); //Support for running OS commands before and after jobs
 
+exports.LWCommServer=function(config){
+
 //var EventEmitter = require('events').EventEmitter;
 //var qs = require('querystring');
 
@@ -117,7 +119,7 @@ require('dns').lookup(require('os').hostname(), function (err, add, fam) {
 
 
 // Init webserver
-var webServer = new nstatic.Server(path.join(__dirname, '/app'));
+var webServer = new nstatic.Server(config.uipath || path.join(__dirname, '/app'));
 var app = http.createServer(function (req, res) {
     var queryData = url.parse(req.url, true).query;
     if (queryData.url) {
@@ -3024,4 +3026,10 @@ function doJobAction(action) {
 
     }
 
+}
+
+}
+
+if (require.main === module) { 
+    exports.LWCommServer(config); 
 }
