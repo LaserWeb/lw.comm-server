@@ -26,7 +26,8 @@ before_install:
   - cd ../lw.comm-server
   - npm install
   - ./node_modules/.bin/electron-rebuild
-  - npm run dist
+  - npm run distlinx86
+  - npm run distlinx64
 #  - npm run distwinx64
 branches:
   only:
