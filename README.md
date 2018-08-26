@@ -25,6 +25,7 @@ The server supports several interfaces to communicate with machines.
 * TinyG (actual version)
 * MarlinKimbra (not finished)
 * Marlin (not finished)
+* RepRapFirmware (not finished)
 
 
 Please check the wiki for details about the API.
