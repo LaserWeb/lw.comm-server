@@ -1391,7 +1391,7 @@ io.sockets.on('connection', function (appSocket) {
                                 if (firmware === 'grbl') {
                                     grblBufferSize.shift();
                                 }
-                                if (firmware === 'repetier' || firmware === 'marlinkimbra' || firmware === 'marlin') || firmware === 'reprapfirmware' {
+                                if (firmware === 'repetier' || firmware === 'marlinkimbra' || firmware === 'marlin' || firmware === 'reprapfirmware') {
                                     reprapBufferSize++;
                                 }
                                 blocked = false;
