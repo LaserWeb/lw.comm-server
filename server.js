@@ -27,7 +27,7 @@
 
 const config           = require('./config');
 const serialport       = require('serialport');
-var SerialPort         = serialport;
+const SerialPort       = serialport;
 const websockets       = require('socket.io');
 const http             = require('http');
 const WebSocket        = require('ws');
@@ -45,53 +45,60 @@ const firmwareFeatures = require('./firmwareFeatures.js');
 const {exec}           = require('child_process'); //Support for running OS commands before and after jobs
 
 exports.LWCommServer = function (config) {
-    //var EventEmitter = require('events').EventEmitter;
-    //var qs = require('querystring');
-    var logFile;
-    var connectionType, connections = [];
-    var gcodeQueue                  = [];
-    var port, isConnected, connectedTo, portsList;
-    var machineSocket, connectedIp;
-    var telnetBuffer, espBuffer;
-
-    var statusLoop, queueCounter, listPortsLoop;
-    var lastSent = '', paused = false, blocked = false;
-
-    var firmware, fVersion, fDate;
-    var feedOverride    = 100;
-    var spindleOverride = 100;
-    var laserTestOn     = false;
-
-    var runningJob;
-    var startTime;
-    var queueLen;
-    var queuePos     = 0;
-    var queuePointer = 0;
-    var readyToSend  = true;
-
-    var optimizeGcode = false;
-
-    var supportedInterfaces = ['USB', 'ESP8266', 'Telnet'];
-
-    var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
-    var grblBufferSize      = [];
-    var new_grbl_buffer     = false;
-
-    var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
-    var smoothie_buffer         = false;
-    var lastMode;
-
-    var TINYG_RX_BUFFER_SIZE = 24;              // max. lines of gcode to send before wait for ok
-    var tinygBufferSize      = TINYG_RX_BUFFER_SIZE; // init space left
-    var jsObject;
-
-    var REPRAP_RX_BUFFER_SIZE = 2;                  // max. lines of gcode to send before wait for ok
-    var reprapBufferSize      = REPRAP_RX_BUFFER_SIZE;   // init space left
-    var reprapWaitForPos      = false;
-
-    var xPos       = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
-    var xOffset    = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
-    var has4thAxis = false;
+    //let EventEmitter = require('events').EventEmitter;
+    //let qs = require('querystring');
+    let logFile;
+    let connectionType, connections = [];
+    let gcodeQueue                  = [];
+    let port;
+    let isConnected;
+    let connectedTo;
+    let portsList;
+    let machineSocket;
+    let connectedIp;
+    let telnetBuffer;
+    let espBuffer;
+    let statusLoop;
+    let queueCounter;
+    let listPortsLoop;
+    let lastSent                    = '';
+    let paused                      = false;
+    let blocked                     = false;
+    let firmware;
+    let fVersion;
+    let fDate;
+    let feedOverride                = 100;
+    let spindleOverride             = 100;
+    let laserTestOn                 = false;
+    let runningJob;
+    let startTime;
+    let queueLen;
+    let queuePos                    = 0;
+    let queuePointer                = 0;
+    let readyToSend                 = true;
+    let optimizeGcode               = false;
+    let supportedInterfaces         = ['USB', 'ESP8266', 'Telnet'];
+    let GRBL_RX_BUFFER_SIZE         = 128; // 128 characters
+    let grblBufferSize              = [];
+    let new_grbl_buffer             = false;
+    let SMOOTHIE_RX_BUFFER_SIZE     = 64;  // max. length of one command line
+    let smoothie_buffer             = false;
+    let lastMode;
+    let TINYG_RX_BUFFER_SIZE        = 24;              // max. lines of gcode to send before wait for ok
+    let tinygBufferSize             = TINYG_RX_BUFFER_SIZE; // init space left
+    let jsObject;
+    let REPRAP_RX_BUFFER_SIZE       = 2;                  // max. lines of gcode to send before wait for ok
+    let reprapBufferSize            = REPRAP_RX_BUFFER_SIZE;   // init space left
+    let reprapWaitForPos            = false;
+    let xPos                        = 0.00;
+    let yPos                        = 0.00;
+    let zPos                        = 0.00;
+    let aPos                        = 0.00;
+    let xOffset                     = 0.00;
+    let yOffset                     = 0.00;
+    let zOffset                     = 0.00;
+    let aOffset                     = 0.00;
+    let has4thAxis                  = false;
 
     require('dns').lookup(require('os').hostname(), function (err, add, fam) {
         writeLog(chalk.green(' '), 0);
@@ -115,9 +122,10 @@ exports.LWCommServer = function (config) {
     });
 
     // Init web server
-    var webServer = new nstatic.Server(config.uipath || path.join(__dirname, '/app'));
-    var app       = http.createServer(function (req, res) {
-        var queryData = url.parse(req.url, true).query;
+    const webServer = new nstatic.Server(config.uipath || path.join(__dirname, '/app'));
+    const app       = http.createServer(function (req, res) {
+        let queryData = url.parse(req.url, true).query;
+
         if (queryData.url) {
             if (queryData.url !== '') {
                 request({
@@ -143,7 +151,7 @@ exports.LWCommServer = function (config) {
 
     app.listen(config.webPort);
 
-    var io = websockets.listen(app);
+    const io = websockets.listen(app);
 
     // WebSocket connection from frontend
     io.sockets.on('connection', function (appSocket) {
@@ -2193,7 +2201,7 @@ exports.LWCommServer = function (config) {
                     }
 
                     if (i > 0) {
-                        startTime    = new Date(Date.now());
+                        startTime = new Date(Date.now());
 
                         // Start interval for qCount messages to socket clients
                         queueCounter = setInterval(function () {
