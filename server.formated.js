@@ -28,6 +28,10 @@
 const config           = require('./config');
 const serialport       = require('serialport');
 const SerialPort       = serialport;
+
+const Readline         = require('@serialport/parser-readline');
+const parser           = new Readline();
+
 const websockets       = require('socket.io');
 const http             = require('http');
 const WebSocket        = require('ws');
@@ -304,10 +308,13 @@ exports.LWCommServer = function (config) {
 
                 switch (connectionType) {
                     case 'usb':
+                        // ****** HERE
                         port = new SerialPort(data[1], {
-                            parser  : serialport.parsers.readline('\n'),
-                            baudrate: parseInt(data[2])
+                            baudRate: parseInt(data[2])
                         });
+
+                        port.pipe(parser);
+                        // ******
 
                         io.sockets.emit('connectStatus', 'opening:' + port.path);
 
@@ -400,7 +407,8 @@ exports.LWCommServer = function (config) {
                             io.sockets.emit('connectStatus', 'Connect');
                         });
 
-                        port.on('data', function (data) {
+                        //port.on('data', function (data) {
+                        parser.on('data', function (data) {
                             writeLog('Recv: ' + data, 3);
 
                             if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
