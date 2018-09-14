@@ -28,6 +28,8 @@
 const config = require('./config');
 const serialport = require('serialport');
 var SerialPort = serialport;
+const Readline         = require('@serialport/parser-readline');
+const parser           = new Readline();
 const websockets = require('socket.io');
 const http = require('http');
 const WebSocket = require('ws');
@@ -179,7 +181,7 @@ io.sockets.on('connection', function (appSocket) {
         if (port) {
             appSocket.emit('connectStatus', 'opened:' + port.path);
             appSocket.emit('activePort', port.path);
-            appSocket.emit('activeBaudRate', port.options.baudRate);
+            appSocket.emit('activeBaudRate', port.baudRate);
         } else {
             appSocket.emit('connectStatus', 'opened:' + connectedTo);
             appSocket.emit('activeIP', connectedTo);
@@ -203,7 +205,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 appSocket.emit('activePort', port.path);
-                appSocket.emit('activeBaudRate', port.options.baudRate);
+                appSocket.emit('activeBaudRate', port.baudRate);
                 break;
             case 'telnet':
                 appSocket.emit('activeIP', connectedTo);
@@ -247,7 +249,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 appSocket.emit('activePort', port.path);
-                appSocket.emit('activeBaudRate', port.options.baudRate);
+                appSocket.emit('activeBaudRate', port.baudRate);
                 break;
             case 'telnet':
                 appSocket.emit('activeIP', connectedTo);
@@ -288,14 +290,17 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
-                    parser: serialport.parsers.readline('\n'),
-                    baudrate: parseInt(data[2])
+                    //parser: serialport.parsers.readline('\n'),
+                    baudRate: parseInt(data[2])
                 });
+
+                port.pipe(parser);
+
                 io.sockets.emit('connectStatus', 'opening:' + port.path);
 
                 // Serial port events -----------------------------------------------
                 port.on('open', function () {
-                    io.sockets.emit('activePort', {port: port.path, baudrate: port.options.baudRate});
+                    io.sockets.emit('activePort', {port: port.path, baudrate: port.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
                     if (config.resetOnConnect == 1) {
                         port.write(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
@@ -342,7 +347,7 @@ io.sockets.on('connection', function (appSocket) {
                     }
                     //machineSend("M115\n");    // Lets check if its Marlin?
 
-                    writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
+                    writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.baudRate, 1);
                     isConnected = true;
                     connectedTo = port.path;
 
@@ -372,7 +377,7 @@ io.sockets.on('connection', function (appSocket) {
                     io.sockets.emit('connectStatus', 'Connect');
                 });
 
-                port.on('data', function (data) {
+                parser.on('data', function (data) {
                     writeLog('Recv: ' + data, 3);
                     if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
                         if (firmware === 'grbl') {
