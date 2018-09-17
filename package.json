@@ -26,9 +26,8 @@
     "chalk": "*",
     "dotenv": "*",
     "node-static": "*",
-    "npm": "^6.4.1",
     "request": "*",
-    "serialport": "^6.2.2",
+    "serialport": "^4.0.7",
     "socket.io": "1.7.x",
     "ws": "^1.1.1"
   },
