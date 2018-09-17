@@ -45,7 +45,3 @@ node_modules
 # Local settings #
 ##################
 .env
-
-# JetBrains #
-#############
-.idea
