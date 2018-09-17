@@ -28,6 +28,8 @@
 const config = require('./config');
 const serialport = require('serialport');
 var SerialPort = serialport;
+const Readline         = require('@serialport/parser-readline');
+const parser           = new Readline();
 const websockets = require('socket.io');
 const http = require('http');
 const WebSocket = require('ws');
@@ -157,7 +159,7 @@ io.sockets.on('connection', function (appSocket) {
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
-    
+
     // check available ports
     serialport.list(function (err, ports) {
         portsList = ports;
@@ -179,7 +181,7 @@ io.sockets.on('connection', function (appSocket) {
         if (port) {
             appSocket.emit('connectStatus', 'opened:' + port.path);
             appSocket.emit('activePort', port.path);
-            appSocket.emit('activeBaudRate', port.options.baudRate);
+            appSocket.emit('activeBaudRate', port.baudRate);
         } else {
             appSocket.emit('connectStatus', 'opened:' + connectedTo);
             appSocket.emit('activeIP', connectedTo);
@@ -190,7 +192,7 @@ io.sockets.on('connection', function (appSocket) {
     } else {
         appSocket.emit('connectStatus', 'Connect');
     }
-    
+
     appSocket.on('firstLoad', function () {
         writeLog(chalk.yellow('INFO: ') + chalk.blue('FirstLoad called'), 1);
         appSocket.emit('serverConfig', config);
@@ -203,7 +205,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 appSocket.emit('activePort', port.path);
-                appSocket.emit('activeBaudRate', port.options.baudRate);
+                appSocket.emit('activeBaudRate', port.baudRate);
                 break;
             case 'telnet':
                 appSocket.emit('activeIP', connectedTo);
@@ -247,7 +249,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 appSocket.emit('activePort', port.path);
-                appSocket.emit('activeBaudRate', port.options.baudRate);
+                appSocket.emit('activeBaudRate', port.baudRate);
                 break;
             case 'telnet':
                 appSocket.emit('activeIP', connectedTo);
@@ -288,14 +290,17 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
-                    parser: serialport.parsers.readline('\n'),
-                    baudrate: parseInt(data[2])
+                    //parser: serialport.parsers.readline('\n'),
+                    baudRate: parseInt(data[2])
                 });
+
+                port.pipe(parser);
+
                 io.sockets.emit('connectStatus', 'opening:' + port.path);
 
                 // Serial port events -----------------------------------------------
                 port.on('open', function () {
-                    io.sockets.emit('activePort', {port: port.path, baudrate: port.options.baudRate});
+                    io.sockets.emit('activePort', {port: port.path, baudrate: port.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
                     if (config.resetOnConnect == 1) {
                         port.write(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
@@ -342,7 +347,7 @@ io.sockets.on('connection', function (appSocket) {
                     }
                     //machineSend("M115\n");    // Lets check if its Marlin?
 
-                    writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.options.baudRate, 1);
+                    writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.baudRate, 1);
                     isConnected = true;
                     connectedTo = port.path;
 
@@ -372,7 +377,7 @@ io.sockets.on('connection', function (appSocket) {
                     io.sockets.emit('connectStatus', 'Connect');
                 });
 
-                port.on('data', function (data) {
+                parser.on('data', function (data) {
                     writeLog('Recv: ' + data, 3);
                     if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
                         if (firmware === 'grbl') {
@@ -1311,7 +1316,7 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket = new WebSocket('ws://'+connectedIp+'/'); // connect to ESP websocket
                 io.sockets.emit('connectStatus', 'opening:' + connectedIp);
 
-                // ESP socket evnets -----------------------------------------------        
+                // ESP socket evnets -----------------------------------------------
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
@@ -1846,10 +1851,10 @@ io.sockets.on('connection', function (appSocket) {
                         io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
                     }, 500);
                     io.sockets.emit('runStatus', 'running');
-					
+
 					//NAB - Added to support action to run befor job starts
                     doJobAction(config.jobOnStart);
-					
+
                     send1Q();
                 }
             }
@@ -1894,7 +1899,7 @@ io.sockets.on('connection', function (appSocket) {
             if (data.length > 2) {
                 feed = parseInt(data[2]);
                 if (feed) {
-                    feed = 'F' + feed;   
+                    feed = 'F' + feed;
                 }
             }
             if (dir && dist && feed) {
@@ -1935,7 +1940,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);    
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -1990,7 +1995,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);    
+                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);
                 io.sockets.emit('data', 'Invalid jogTo() params!');
             }
         } else {
@@ -2268,7 +2273,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('feedOverride', function (data) {
         if (isConnected) {
             switch (firmware) {
@@ -2713,10 +2718,10 @@ io.sockets.on('connection', function (appSocket) {
             blocked = false;
             paused = false;
             io.sockets.emit('runStatus', 'stopped');
-			
+
 			//NAB - Added to support action to run after job aborts
             doJobAction(config.jobOnAbort);
-			
+
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -2928,7 +2933,7 @@ io.sockets.on('connection', function (appSocket) {
             }
         }
     });
-    
+
     appSocket.on('clearAlarm', function (data) { // Clear Alarm
         if (isConnected) {
             data = parseInt(data);
@@ -3015,7 +3020,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('resetMachine', function () {
         if (isConnected) {
             writeLog(chalk.red('Reset Machine'), 1);
@@ -3046,7 +3051,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('closePort', function (data) { // Close machine port and dump queue
         if (isConnected) {
             switch (connectionType) {
@@ -3096,12 +3101,12 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('disconnect', function () { // App disconnected
         let id = connections.indexOf(appSocket);
         writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
         connections.splice(id, 1);
-    });    
+    });
 
 }); // End appSocket
 
@@ -3195,7 +3200,7 @@ function send1Q() {
                     gcodeLen = gcodeQueue[queuePointer].length;
                     if (gcodeLen < spaceLeft) {
                         // Add gcode to send buffer
-                        gcodeLine += gcodeQueue[queuePointer]; 
+                        gcodeLine += gcodeQueue[queuePointer];
                         queuePointer++;
                         spaceLeft -= gcodeLen;
                     } else {
@@ -3270,9 +3275,9 @@ function send1Q() {
             startTime = null;
             runningJob = null;
             io.sockets.emit('runStatus', 'finished');
-			
+
 			//NAB - Added to support action to run after job completes
-            doJobAction(config.jobOnFinish);			
+            doJobAction(config.jobOnFinish);
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
@@ -3339,6 +3344,6 @@ function doJobAction(action) {
 
 }
 
-if (require.main === module) { 
-    exports.LWCommServer(config); 
+if (require.main === module) {
+    exports.LWCommServer(config);
 }
