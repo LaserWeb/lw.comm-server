@@ -1,6 +1,6 @@
 FROM resin/raspberrypi3-node:7
 
-ADD config.js grblStrings.js LICENSE lw.comm-server.service package.json README.md server.js version.txt /laserweb/
+ADD config.js grblStrings.js firmwareFeatures.js LICENSE lw.comm-server.service package.json README.md server.js version.txt /laserweb/
 ADD app /laserweb/app/
 
 RUN cd /laserweb && npm install
