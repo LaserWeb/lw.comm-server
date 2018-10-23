@@ -17,9 +17,8 @@
   },
   "devDependencies": {		
     "copyfiles": "^1.2.0",		
-    "electron": "^1.6.x",		
-    "electron-builder": "^14.1.1",		
-    "electron-rebuild": "^1.5.7",		
+    "electron": "^3.0.5",		
+    "electron-builder": "^20.28.0",
     "ncp": "^2.0.0"		
   },
   "dependencies": {
@@ -28,7 +27,7 @@
     "node-static": "*",
     "request": "*",
     "serialport": "^7.0.2",
-    "socket.io": "^1.7.4",
+    "socket.io": "^2.1.1",
     "ws": "^6.0.0"
   },
   "bugs": {
@@ -39,7 +38,8 @@
   "scripts": {
     "start": "echo \"Please run 'npm run dist' to create a local installer, or run 'npm run nightlylinux' or 'npm run nightlywindows' to build distributable installers for each platform\" ",
     "test": "echo \"Error: no test specified\" && exit 0",
-    "update_lw4": "git rm app/ -r -f && cp ../LaserWeb4/dist/. app/ -r -u && git add app/",
+    "electron": "electron .",
+	"update_lw4": "git rm app/ -r -f && cp ../LaserWeb4/dist/. app/ -r -u && git add app/",
     "dist": "npm run copy && build",
     "distmac": "npm run copy && build --mac ",		
     "distwinx86": "npm run copy && build --win --ia32 ",		
