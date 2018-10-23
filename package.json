@@ -27,9 +27,9 @@
     "dotenv": "*",
     "node-static": "*",
     "request": "*",
-    "serialport": "^4.0.7",
-    "socket.io": "1.7.x",
-    "ws": "^1.1.1"
+    "serialport": "^7.0.2",
+    "socket.io": "^1.7.4",
+    "ws": "^6.0.0"
   },
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
