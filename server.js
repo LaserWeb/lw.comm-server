@@ -2088,7 +2088,7 @@ io.sockets.on('connection', function (appSocket) {
                     addQ('G38.2 ' + data.direction);
                     break;
                 }
-				break;
+                break;
             case 'grbl':
                 addQ('G38.2 ' + data.direction + '-5 F1');
                 addQ('G92 ' + data.direction + ' ' + data.probeOffset);
