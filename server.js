@@ -53,7 +53,7 @@ exports.LWCommServer=function(config){
 var logFile;
 var connectionType, connections = [];
 var gcodeQueue = [];
-var port, isConnected, connectedTo, portsList;
+var port, parser, isConnected, connectedTo, portsList;
 var machineSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
@@ -95,7 +95,6 @@ var reprapWaitForPos = false;
 var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
-
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
@@ -289,9 +288,10 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
-		    parser: new Readline('\n'),
-                    baudRate: parseInt(data[2])
+                    baudRate: parseInt(data[2].replace('baud',''))
                 });
+		parser = new Readline({ delimiter: '\n' });
+		port.pipe(parser);
                 io.sockets.emit('connectStatus', 'opening:' + port.path);
 
                 // Serial port events -----------------------------------------------
@@ -373,8 +373,8 @@ io.sockets.on('connection', function (appSocket) {
                     io.sockets.emit('connectStatus', 'Connect');
                 });
 
-                port.on('data', function (data) {
-                    writeLog('Recv: ' + data, 3);
+                parser.on('data', function (data) {
+		    data = data.toString().trimStart();
                     if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
                         if (firmware === 'grbl') {
                             grblBufferSize.shift();
