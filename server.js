@@ -375,6 +375,7 @@ io.sockets.on('connection', function (appSocket) {
 
                 parser.on('data', function (data) {
 		    data = data.toString().trimStart();
+		    writeLog('Recv: ' + data, 3);
                     if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
                         if (firmware === 'grbl') {
                             grblBufferSize.shift();
