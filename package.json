@@ -27,7 +27,7 @@
     "dotenv": "*",
     "node-static": "*",
     "request": "*",
-    "serialport": "^4.0.7",
+    "serialport": "^6.2.2",
     "socket.io": "1.7.x",
     "ws": "^1.1.1"
   },
