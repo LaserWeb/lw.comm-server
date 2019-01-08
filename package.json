@@ -5,7 +5,7 @@
   "description": "Unified communications server for LaserWeb/CNCweb",
   "author": "github.com/LaserWeb",
   "contributors": [
-    "Claudio Prezzi <claudio.prezzi@gmail.com>"
+    "Claudio Prezzi <claudio.prezzi@gmail.com>",
     "Peter van der Walt <peter.plaaswerf@gmail.com>"
   ],
   "repository": {
