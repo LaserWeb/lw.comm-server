@@ -882,10 +882,12 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('connect', function (prompt) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
-                    isConnected = true;
-                    connectedTo = connectedIp;
-
+                    if (config.resetOnConnect == 1) {
+                        machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                        writeLog('Sent: ctrl-x', 1);
+                    } else {
+                        machineSend('\n'); // this causes smoothie to send the welcome string
+                    }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
@@ -900,11 +902,11 @@ io.sockets.on('connection', function (appSocket) {
                                             reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
-                                    }, 1000);
+                                    }, config.tinygWaitTime * 1000);
                                 }
-                            }, 500);
+                            }, config.smoothieWaitTime * 1000);
                         }
-                    }, 500);
+                    }, config.grblWaitTime * 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
                             // Close port if we don't detect supported firmware after 2s.
@@ -922,6 +924,10 @@ io.sockets.on('connection', function (appSocket) {
                         }, config.firmwareWaitTime * 1000);
                     }
 
+                    writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
+                    isConnected = true;
+                    connectedTo = connectedIp;
+                    
                     // Start interval for qCount messages to appSocket clients
 //                    queueCounter = setInterval(function () {
 //                        io.sockets.emit('qCount', gcodeQueue.length);
@@ -1182,7 +1188,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }, 250);
                         } else if (data.indexOf('start') === 0) { // Check if it's RepRap
-                            machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                            machineSend('M115\n'); // Check if it's Repetier or Marlin(Kimbra)
                             reprapBufferSize--;
                             writeLog('Sent: M115', 2);
                         } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
@@ -1221,7 +1227,7 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }
                             }, 250);
-                        } else if (data.indexOf('FIRMWARE_NAME:Marlin') >= 0) { // Check if it's MarlinKimbra
+                        } else if (data.indexOf('FIRMWARE_NAME:Marlin') >= 0) { // Check if it's Marlin
                             firmware = 'marlin';
                             var startPos = data.search(/marlin_/i) + 7;
                             fVersion = data.substr(startPos, 5); // get version
@@ -1324,11 +1330,12 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connected @ ' + connectedIp), 1);
-                    isConnected = true;
-                    connectedTo = connectedIp;
-                    //machineSend(String.fromCharCode(0x18));
-
+                    if (config.resetOnConnect == 1) {
+                        machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
+                        writeLog('Sent: ctrl-x', 1);
+                    } else {
+                        machineSend('\n'); // this causes smoothie to send the welcome string
+                    }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
@@ -1343,11 +1350,11 @@ io.sockets.on('connection', function (appSocket) {
                                             reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
-                                    }, 1000);
+                                    }, config.tinygWaitTime * 1000);
                                 }
-                            }, 500);
+                            }, config.smoothieWaitTime * 1000);
                         }
-                    }, 500);
+                    }, config.grblWaitTime * 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
                             // Close port if we don't detect supported firmware after 2s.
@@ -1366,6 +1373,11 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }, config.firmwareWaitTime * 1000);
                     }
+
+                    writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connected @ ' + connectedIp), 1);
+                    isConnected = true;
+                    connectedTo = connectedIp;
+                    //machineSend(String.fromCharCode(0x18));
                 });
 
                 machineSocket.on('close', function (e) {

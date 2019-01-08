@@ -15,12 +15,12 @@ The server supports several interfaces to communicate with machines.
 ### Implemented:
 * Serial over **USB**
 * Websocket to **ESP8266** (as WLAN to serial gateway)
-* **Telnet** over Network (for Smoothieware only)
+* **Telnet** over Network (or WLAN)
 
 ## Supported firmwares
 * Grbl (ATmega328)
 * Grbl MEGA RAMPS (Arduino MEGA 2560 + RAMPS)
-* Grbl-LPC (for LPC1769 boards like C3d, Smoothieboard, MKS SBASE)
+* Grbl-LPC (for LPC1769 boards like C3d, Smoothieboard, MKS SBASE, Azteeg)
 * Smoothieware (actual version of firmware-cnc.bin)
 * TinyG (actual version)
 * MarlinKimbra (not finished)
