@@ -17,9 +17,9 @@
   },
   "devDependencies": {
     "copyfiles": "^1.2.0",
-    "electron": "^1.6.x",
-    "electron-builder": "^14.1.1",
-    "electron-rebuild": "^1.5.7",
+    "electron": "^1.8.8",
+    "electron-builder": "^14.5.3",
+    "electron-rebuild": "^1.8.2",
     "ncp": "^2.0.0"
   },
   "dependencies": {
@@ -28,8 +28,8 @@
     "node-static": "*",
     "request": "*",
     "serialport": "^6.2.2",
-    "socket.io": "1.7.x",
-    "ws": "^1.1.1"
+    "socket.io": "^1.7.4",
+    "ws": "^1.1.5"
   },
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
