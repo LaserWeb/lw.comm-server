@@ -76,20 +76,20 @@ var optimizeGcode = false;
 
 var supportedInterfaces = ['USB', 'ESP8266', 'Telnet'];
 
-var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
+var GRBL_RX_BUFFER_SIZE = config.grblBufferSize;            // max. chars (default: 128)
 var grblBufferSize = [];
 var new_grbl_buffer = false;
 
-var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
+var SMOOTHIE_RX_BUFFER_SIZE = config.smoothieBufferSize;    // max. length of one command line (default: 64)
 var smoothie_buffer = false;
 var lastMode;
 
-var TINYG_RX_BUFFER_SIZE = 24;              // max. lines of gcode to send before wait for ok
-var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
+var TINYG_RX_BUFFER_SIZE = config.tinygBufferSize;          // max. lines of gcode to send before wait for ok (default: 24)
+var tinygBufferSize = TINYG_RX_BUFFER_SIZE;                 // init space left
 var jsObject;
 
-var REPRAP_RX_BUFFER_SIZE = 2;                  // max. lines of gcode to send before wait for ok
-var reprapBufferSize = REPRAP_RX_BUFFER_SIZE;   // init space left
+var REPRAP_RX_BUFFER_SIZE = config.reprapBufferSize;        // max. lines of gcode to send before wait for ok (default: 2)
+var reprapBufferSize = REPRAP_RX_BUFFER_SIZE;               // init space left
 var reprapWaitForPos = false;
 
 var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;

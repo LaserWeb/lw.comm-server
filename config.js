@@ -17,6 +17,11 @@ config.grblWaitTime = process.env.GRBL_WAIT_TIME || 1;
 config.smoothieWaitTime = process.env.SMOOTHIE_WAIT_TIME || 1;
 config.tinygWaitTime = process.env.TINYG_WAIT_TIME || 1;
 
+config.grblBufferSize = process.env.GRBL_BUFFER_SIZE || 128;
+config.smoothieBufferSize = process.env.SMOOTHIE_BUFFER_SIZE || 64;
+config.tinygBufferSize = process.env.TINYG_BUFFER_SIZE || 24;
+config.reprapBufferSize = process.env.REPRAP_BUFFER_SIZE || 2;
+
 config.jobOnStart = '';
 config.jobOnFinish = '';
 config.jobOnAbort = '';
