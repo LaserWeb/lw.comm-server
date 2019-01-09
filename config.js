@@ -4,7 +4,7 @@ const path = require('path');
 var config = {};
 
 config.webPort = process.env.WEB_PORT || 8000;
-config.serverVersion = '4.0.133';
+config.serverVersion = '4.0.134';
 config.apiVersion = '4.0.7';
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
