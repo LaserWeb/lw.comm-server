@@ -527,7 +527,7 @@
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
@@ -612,9 +612,9 @@
 
 	;
 
-/***/ },
+/***/ }),
 /* 1 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	// Copyright 2014-2016 Todd Fleming
 	//
@@ -1113,9 +1113,9 @@
 
 	;
 
-/***/ },
+/***/ }),
 /* 2 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;// rev 482
 	/********************************************************************************
@@ -8037,9 +8037,9 @@
 	})();
 
 
-/***/ },
+/***/ }),
 /* 3 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -8584,9 +8584,9 @@
 	module.exports = SweepContext;
 
 
-/***/ },
+/***/ }),
 /* 4 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -8642,9 +8642,9 @@
 	module.exports = PointError;
 
 
-/***/ },
+/***/ }),
 /* 5 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -8755,9 +8755,9 @@
 	};
 
 
-/***/ },
+/***/ }),
 /* 6 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -9036,9 +9036,9 @@
 	module.exports = Point;
 
 
-/***/ },
+/***/ }),
 /* 7 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -9603,9 +9603,9 @@
 	module.exports = Triangle;
 
 
-/***/ },
+/***/ }),
 /* 8 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -10443,9 +10443,9 @@
 	exports.triangulate = triangulate;
 
 
-/***/ },
+/***/ }),
 /* 9 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -10482,9 +10482,9 @@
 	
 
 
-/***/ },
+/***/ }),
 /* 10 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -10667,9 +10667,9 @@
 	
 
 
-/***/ },
+/***/ }),
 /* 11 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/*
 	 * Poly2Tri Copyright (c) 2009-2014, Poly2Tri Contributors
@@ -10782,9 +10782,9 @@
 	
 
 
-/***/ },
+/***/ }),
 /* 12 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_LOCAL_MODULE_0__;var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*** IMPORTS FROM imports-loader ***/
 	(function() {
@@ -19422,6 +19422,6 @@
 	}));
 	}.call(window));
 
-/***/ }
+/***/ })
 /******/ ]);
 //# sourceMappingURL=98e1297a18cb5866dfd1.worker.js.map
