@@ -2,7 +2,7 @@
 
 **lw.comm-server** is the unified communications server for LaserWeb. It is the gateway between the machnine and the frontend and cares about all different interfaces & firmware specific protocols, so the clients doesn't have to care about the machine controller and firmware (as far as possible).
 
-lw.comm-server is based on nodejs 6.x.
+This version of lw.comm-server is based on nodejs 8.12.0 and npm 6.4.1 (npm module serialport needs Python 2 to compile).
 
 ## Communication structure
 ![Communication diagram](https://github.com/LaserWeb/lw.comm-server/blob/master/doc/communications-diagram.jpg)
@@ -18,14 +18,14 @@ The server supports several interfaces to communicate with machines.
 * **Telnet** over Network (or WLAN)
 
 ## Supported firmwares
-* Grbl (ATmega328)
+* Grbl (ATmega328 like Arduino Uno or Nano)
 * Grbl MEGA RAMPS (Arduino MEGA 2560 + RAMPS)
 * Grbl-LPC (for LPC1769 boards like C3d, Smoothieboard, MKS SBASE, Azteeg)
 * Smoothieware (actual version of firmware-cnc.bin)
-* TinyG (actual version)
-* MarlinKimbra (not finished)
-* Marlin (not finished)
-* RepRapFirmware (not finished)
+* TinyG
+* MarlinKimbra
+* Marlin
+* RepRapFirmware
 
 
 Please check the wiki for details about the API.
