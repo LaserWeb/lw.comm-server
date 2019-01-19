@@ -2152,6 +2152,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'marlinkimbra':
                     addQ('G28.2 X');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 X0');
+                    break;
                 case 'marlin':
                 case 'reprapfirmware':
                     addQ('G28 X');
@@ -2173,6 +2176,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'reprapfirmware':
                     addQ('G28 Y');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 Y0');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2190,6 +2196,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'reprapfirmware':
                     addQ('G28 Z');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 Z0');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2205,6 +2214,9 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 case 'marlin':
                     addQ('G28 E1'); // ????
+                    break;
+                case 'tinyg':
+                    addQ('G28.2 A0');
                     break;
                 default:
                     //not supported
@@ -2226,6 +2238,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'reprapfirmware':
                     addQ('G28 X Y Z');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 X0 Y0 Z0');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2245,6 +2260,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'marlin':
                 case 'reprapfirmware':
                     addQ('G28 X Y Z E');
+                    break;
+                case 'tinyg':
+                    addQ('G28.2 X0 Y0 Z0 A0');
                     break;
                 default:
                     //not supported
