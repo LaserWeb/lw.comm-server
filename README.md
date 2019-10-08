@@ -2,7 +2,7 @@
 
 **lw.comm-server** is the unified communications server for LaserWeb. It is the gateway between the machnine and the frontend and cares about all different interfaces & firmware specific protocols, so the clients doesn't have to care about the machine controller and firmware (as far as possible).
 
-lw.comm-server is based on nodejs 6.x.
+lw.comm-server is based on nodejs 10.x.
 
 ## Communication structure
 ![Communication diagram](https://github.com/LaserWeb/lw.comm-server/blob/master/doc/communications-diagram.jpg)

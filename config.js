@@ -1,10 +1,11 @@
-require('dotenv').load({silent: true});
+require('dotenv');
+//.load({silent: true});
 const path = require('path');
 
 var config = {};
 
 config.webPort = process.env.WEB_PORT || 8000;
-config.serverVersion = '4.0.135';
+config.serverVersion = '4.0.136';
 config.apiVersion = '4.0.7';
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
