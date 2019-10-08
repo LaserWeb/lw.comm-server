@@ -20,6 +20,7 @@
     "ncp": "^2.0.0"
   },
   "dependencies": {
+    "node": "8.15.0",
     "chalk": "*",
     "dotenv": "*",
     "node-static": "*",
