@@ -22,7 +22,6 @@
   "dependencies": {
     "chalk": "*",
     "dotenv": "8.x",
-    "node": "^10.16.3",
     "node-static": "*",
     "request": "*",
     "serialport": "7.x",
@@ -60,6 +59,10 @@
     "gateway",
     "ESP8266"
   ],
+  "engines": {
+    "node": ">=10.15.1",
+    "npm": ">=6.4.1"
+  },
   "build": {
     "appId": "xyz.laserweb",
     "productName": "LaserWeb",
