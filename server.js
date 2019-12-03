@@ -28,8 +28,8 @@
 const config = require('./config');
 const serialport = require('serialport');
 var SerialPort = serialport;
-const Readline         = require('@serialport/parser-readline');
-const parser           = new Readline();
+const Readline = require('@serialport/parser-readline');
+const parser = new Readline();
 const websockets = require('socket.io');
 const http = require('http');
 const WebSocket = require('ws');
