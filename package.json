@@ -1,36 +1,32 @@
 {
   "name": "lw.comm-server",
-  "version": "4.0.131",
+  "version": "4.0.136",
   "license": "AGPL-3.0",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "author": "github.com/LaserWeb",
   "contributors": [
-    "Peter van der Walt <peter.plaaswerf@gmail.com>",
-    "Sébastien Mischler <sebastien@onlfait.ch>",
-    "Todd Fleming <jscut.org>",
-    "Jorge Robles <jorge.diego.robles@gmail.com>",
-    "Claudio Prezzi <claudio.prezzi@gmail.com>"
+    "Claudio Prezzi <claudio.prezzi@gmail.com>",
+    "Peter van der Walt <peter.plaaswerf@gmail.com>"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
   },
   "devDependencies": {
-    "copyfiles": "^1.2.0",
-    "electron": "^2.0.10",
-    "electron-builder": "^14.1.1",
-    "electron-rebuild": "^1.5.7",
-    "ncp": "^2.0.0"
+    "copyfiles": "1.2.x",
+    "electron": "1.8.x",
+    "electron-builder": "14.5.x",
+    "electron-rebuild": "1.8.x",
+    "ncp": "2.0.x"
   },
   "dependencies": {
     "chalk": "*",
-    "dotenv": "*",
+    "dotenv": "8.x",
     "node-static": "*",
-    "npm": "^6.4.1",
     "request": "*",
-    "serialport": "^6.2.2",
+    "serialport": "7.x",
     "socket.io": "1.7.x",
-    "ws": "^1.1.1"
+    "ws": "^1.1.x"
   },
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
@@ -63,6 +59,10 @@
     "gateway",
     "ESP8266"
   ],
+  "engines": {
+    "node": ">=10.15.1",
+    "npm": ">=6.4.1"
+  },
   "build": {
     "appId": "xyz.laserweb",
     "productName": "LaserWeb",
@@ -70,6 +70,9 @@
     "files": [
       "**/*"
     ],
+    "win": {
+      "icon": "app/favicon.ico"
+    },
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.graphics-design"

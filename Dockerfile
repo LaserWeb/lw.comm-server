@@ -1,4 +1,4 @@
-FROM resin/raspberrypi3-node:7
+FROM resin/raspberrypi3-node:10
 
 ADD config.js grblStrings.js firmwareFeatures.js LICENSE lw.comm-server.service package.json README.md server.js version.txt /laserweb/
 ADD app /laserweb/app/

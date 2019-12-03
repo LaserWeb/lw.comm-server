@@ -28,8 +28,7 @@
 const config = require('./config');
 const serialport = require('serialport');
 var SerialPort = serialport;
-const Readline = require('@serialport/parser-readline');
-const parser = new Readline();
+const Readline = SerialPort.parsers.Readline;
 const websockets = require('socket.io');
 const http = require('http');
 const WebSocket = require('ws');
@@ -54,7 +53,7 @@ exports.LWCommServer=function(config){
 var logFile;
 var connectionType, connections = [];
 var gcodeQueue = [];
-var port, isConnected, connectedTo, portsList;
+var port, parser, isConnected, connectedTo, portsList;
 var machineSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
@@ -77,36 +76,25 @@ var optimizeGcode = false;
 
 var supportedInterfaces = ['USB', 'ESP8266', 'Telnet'];
 
-var GRBL_RX_BUFFER_SIZE = 128; // 128 characters
+var GRBL_RX_BUFFER_SIZE = config.grblBufferSize;            // max. chars (default: 128)
 var grblBufferSize = [];
 var new_grbl_buffer = false;
 
-var SMOOTHIE_RX_BUFFER_SIZE = 64;  // max. length of one command line
+var SMOOTHIE_RX_BUFFER_SIZE = config.smoothieBufferSize;    // max. length of one command line (default: 64)
 var smoothie_buffer = false;
 var lastMode;
 
-var TINYG_RX_BUFFER_SIZE = 24;              // max. lines of gcode to send before wait for ok
-var tinygBufferSize = TINYG_RX_BUFFER_SIZE; // init space left
+var TINYG_RX_BUFFER_SIZE = config.tinygBufferSize;          // max. lines of gcode to send before wait for ok (default: 24)
+var tinygBufferSize = TINYG_RX_BUFFER_SIZE;                 // init space left
 var jsObject;
 
-var REPRAP_RX_BUFFER_SIZE = 2;                  // max. lines of gcode to send before wait for ok
-var reprapBufferSize = REPRAP_RX_BUFFER_SIZE;   // init space left
+var REPRAP_RX_BUFFER_SIZE = config.reprapBufferSize;        // max. lines of gcode to send before wait for ok (default: 2)
+var reprapBufferSize = REPRAP_RX_BUFFER_SIZE;               // init space left
 var reprapWaitForPos = false;
 
 var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
-
-
-//Cartesian to Polar Transformation
-var W = 795;
-var X = 290;
-var Y = 240;
-var A = (Math.sqrt(Math.pow(X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
-var B = (Math.sqrt(Math.pow(W-X, 2) + Math.pow(Y, 2))).toFixed(config.posDecimals);
-var lastX = false, lastY = false;
-var polarTransformation = false;     // transform x/y to a/b for polargraph
-
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
@@ -174,7 +162,7 @@ io.sockets.on('connection', function (appSocket) {
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
-
+    
     // check available ports
     serialport.list(function (err, ports) {
         portsList = ports;
@@ -196,7 +184,7 @@ io.sockets.on('connection', function (appSocket) {
         if (port) {
             appSocket.emit('connectStatus', 'opened:' + port.path);
             appSocket.emit('activePort', port.path);
-            appSocket.emit('activeBaudRate', port.baudRate);
+            appSocket.emit('activeBaudRate', port.settings.baudRate);
         } else {
             appSocket.emit('connectStatus', 'opened:' + connectedTo);
             appSocket.emit('activeIP', connectedTo);
@@ -207,7 +195,7 @@ io.sockets.on('connection', function (appSocket) {
     } else {
         appSocket.emit('connectStatus', 'Connect');
     }
-
+    
     appSocket.on('firstLoad', function () {
         writeLog(chalk.yellow('INFO: ') + chalk.blue('FirstLoad called'), 1);
         appSocket.emit('serverConfig', config);
@@ -220,7 +208,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 appSocket.emit('activePort', port.path);
-                appSocket.emit('activeBaudRate', port.baudRate);
+                appSocket.emit('activeBaudRate', port.settings.baudRate);
                 break;
             case 'telnet':
                 appSocket.emit('activeIP', connectedTo);
@@ -264,7 +252,7 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 appSocket.emit('activePort', port.path);
-                appSocket.emit('activeBaudRate', port.baudRate);
+                appSocket.emit('activeBaudRate', port.settings.baudRate);
                 break;
             case 'telnet':
                 appSocket.emit('activeIP', connectedTo);
@@ -305,17 +293,15 @@ io.sockets.on('connection', function (appSocket) {
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
-                    //parser: serialport.parsers.readline('\n'),
-                    baudRate: parseInt(data[2])
+                    baudRate: parseInt(data[2].replace('baud',''))
                 });
-
-                port.pipe(parser);
-
+        		parser = new Readline({ delimiter: '\n' });
+		        port.pipe(parser);
                 io.sockets.emit('connectStatus', 'opening:' + port.path);
 
                 // Serial port events -----------------------------------------------
                 port.on('open', function () {
-                    io.sockets.emit('activePort', {port: port.path, baudrate: port.baudRate});
+                    io.sockets.emit('activePort', {port: port.path, baudrate: port.settings.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
                     if (config.resetOnConnect == 1) {
                         port.write(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
@@ -362,7 +348,7 @@ io.sockets.on('connection', function (appSocket) {
                     }
                     //machineSend("M115\n");    // Lets check if its Marlin?
 
-                    writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.baudRate, 1);
+                    writeLog(chalk.yellow('INFO: ') + 'Connected to ' + port.path + ' at ' + port.settings.baudRate, 1);
                     isConnected = true;
                     connectedTo = port.path;
 
@@ -393,6 +379,7 @@ io.sockets.on('connection', function (appSocket) {
                 });
 
                 parser.on('data', function (data) {
+                    //data = data.toString().trimStart();
                     writeLog('Recv: ' + data, 3);
                     if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
                         if (firmware === 'grbl') {
@@ -598,6 +585,9 @@ io.sockets.on('connection', function (appSocket) {
                         }
                         io.sockets.emit('wPos', {x: xPos, y: yPos, z: zPos, a: aPos});
                         //writeLog('wPos: X:' + xPos + ' Y:' + yPos + ' Z:' + zPos + ' E:' + aPos, 3);
+                        if (firmware === 'reprapfirmware') {
+                            //reprapBufferSize++;
+                        }
                         reprapWaitForPos = false;
 
                     } else if (data.indexOf('Grbl') === 0) { // Check if it's Grbl
@@ -670,7 +660,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }, 250);
-                    }else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
+                    } else if (data.indexOf('FIRMWARE_NAME:MK') >= 0) { // Check if it's MarlinKimbra
                         firmware = 'marlinkimbra';
                         var startPos = data.search(/mk_/i) + 3;
                         fVersion = data.substr(startPos, 5); // get version
@@ -688,18 +678,20 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }, 250);
-                    }else if (data.indexOf('FIRMWARE_NAME: RepRap') >= 0) { // Check if it's RepRapFirmware
+                    } else if (data.indexOf('FIRMWARE_NAME: RepRapFirmware') >= 0) { // Check if it's RepRapFirmware
                         firmware = 'reprapfirmware';
-                        var startPos = data.search(/firmware_version:/i) + 17;
-                        fVersion = data.substr(startPos, 5); // get version
-                        startPos = data.search(/firmware_date:/i) + 15;
-                        fDate = new Date(data.substr(startPos, 10));
+                        var startPos = data.search(/firmware_version:/i) + 18;
+                        fVersion = data.substr(startPos, 7); // get version
+                        startPos = data.search(/firmware_date:/i) + 16;
+                        fDate = new Date(data.substr(startPos, 12));
+                        REPRAP_RX_BUFFER_SIZE = 5;
+                        reprapBufferSize = REPRAP_RX_BUFFER_SIZE;
                         writeLog('RepRapFirmware detected (' + fVersion + ')', 1);
                         io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
                         // Start intervall for status queries
                         statusLoop = setInterval(function () {
                             if (isConnected) {
-                                if (!reprapWaitForPos && reprapBufferSize >= 0) {
+                                if (!reprapWaitForPos && reprapBufferSize > 0) {
                                     reprapWaitForPos = true;
                                     machineSend('M114\n'); // query position
                                     reprapBufferSize--;
@@ -895,10 +887,12 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('connect', function (prompt) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
-                    isConnected = true;
-                    connectedTo = connectedIp;
-
+                    if (config.resetOnConnect == 1) {
+                        machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                        writeLog('Sent: ctrl-x', 1);
+                    } else {
+                        machineSend('\n'); // this causes smoothie to send the welcome string
+                    }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
@@ -913,11 +907,11 @@ io.sockets.on('connection', function (appSocket) {
                                             reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
-                                    }, 1000);
+                                    }, config.tinygWaitTime * 1000);
                                 }
-                            }, 500);
+                            }, config.smoothieWaitTime * 1000);
                         }
-                    }, 500);
+                    }, config.grblWaitTime * 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
                             // Close port if we don't detect supported firmware after 2s.
@@ -935,6 +929,10 @@ io.sockets.on('connection', function (appSocket) {
                         }, config.firmwareWaitTime * 1000);
                     }
 
+                    writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
+                    isConnected = true;
+                    connectedTo = connectedIp;
+                    
                     // Start interval for qCount messages to appSocket clients
 //                    queueCounter = setInterval(function () {
 //                        io.sockets.emit('qCount', gcodeQueue.length);
@@ -1195,7 +1193,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }, 250);
                         } else if (data.indexOf('start') === 0) { // Check if it's RepRap
-                            machineSend('M115\n'); // Check if it's Repetier or MarlinKimbra
+                            machineSend('M115\n'); // Check if it's Repetier or Marlin(Kimbra)
                             reprapBufferSize--;
                             writeLog('Sent: M115', 2);
                         } else if (data.indexOf('FIRMWARE_NAME:Repetier') >= 0) { // Check if it's Repetier
@@ -1234,7 +1232,7 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }
                             }, 250);
-                        } else if (data.indexOf('FIRMWARE_NAME:Marlin') >= 0) { // Check if it's MarlinKimbra
+                        } else if (data.indexOf('FIRMWARE_NAME:Marlin') >= 0) { // Check if it's Marlin
                             firmware = 'marlin';
                             var startPos = data.search(/marlin_/i) + 7;
                             fVersion = data.substr(startPos, 5); // get version
@@ -1252,12 +1250,14 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }
                             }, 250);
-                        }else if (data.indexOf('FIRMWARE_NAME: RepRap') >= 0) { // Check if it's RepRapFirmware
+                        } else if (data.indexOf('FIRMWARE_NAME: RepRapFirmware') >= 0) { // Check if it's RepRapFirmware
                             firmware = 'reprapfirmware';
-                            var startPos = data.search(/firmware_version:/i) + 17;
-                            fVersion = data.substr(startPos, 5); // get version
-                            startPos = data.search(/firmware_date:/i) + 15;
-                            fDate = new Date(data.substr(startPos, 10));
+                            var startPos = data.search(/firmware_version:/i) + 18;
+                            fVersion = data.substr(startPos, 7); // get version
+                            startPos = data.search(/firmware_date:/i) + 16;
+                            fDate = new Date(data.substr(startPos, 12));
+                            REPRAP_RX_BUFFER_SIZE = 5;
+                            reprapBufferSize = REPRAP_RX_BUFFER_SIZE;
                             writeLog('RepRapFirmware detected (' + fVersion + ')', 1);
                             io.sockets.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
                             // Start intervall for status queries
@@ -1331,15 +1331,16 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket = new WebSocket('ws://'+connectedIp+'/'); // connect to ESP websocket
                 io.sockets.emit('connectStatus', 'opening:' + connectedIp);
 
-                // ESP socket evnets -----------------------------------------------
+                // ESP socket evnets -----------------------------------------------        
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connected @ ' + connectedIp), 1);
-                    isConnected = true;
-                    connectedTo = connectedIp;
-                    //machineSend(String.fromCharCode(0x18));
-
+                    if (config.resetOnConnect == 1) {
+                        machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
+                        writeLog('Sent: ctrl-x', 1);
+                    } else {
+                        machineSend('\n'); // this causes smoothie to send the welcome string
+                    }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
                             machineSend('version\n'); // Check if it's Smoothieware?
@@ -1354,11 +1355,11 @@ io.sockets.on('connection', function (appSocket) {
                                             reprapBufferSize--;
                                             writeLog('Sent: M115', 2);
                                         }
-                                    }, 1000);
+                                    }, config.tinygWaitTime * 1000);
                                 }
-                            }, 500);
+                            }, config.smoothieWaitTime * 1000);
                         }
-                    }, 500);
+                    }, config.grblWaitTime * 1000);
                     if (config.firmwareWaitTime > 0) {
                         setTimeout(function () {
                             // Close port if we don't detect supported firmware after 2s.
@@ -1377,6 +1378,11 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }, config.firmwareWaitTime * 1000);
                     }
+
+                    writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connected @ ' + connectedIp), 1);
+                    isConnected = true;
+                    connectedTo = connectedIp;
+                    //machineSend(String.fromCharCode(0x18));
                 });
 
                 machineSocket.on('close', function (e) {
@@ -1642,7 +1648,7 @@ io.sockets.on('connection', function (appSocket) {
                                         }
                                     }
                                 }, 250);
-                            }else if (data.indexOf('FIRMWARE_NAME: RepRap') >= 0) { // Check if it's RepRapFirmware
+                            }else if (data.indexOf('FIRMWARE_NAME: RepRapFirmware') >= 0) { // Check if it's RepRapFirmware
                                 firmware = 'reprapfirmware';
                                 var startPos = data.search(/firmware_version:/i) + 17;
                                 fVersion = data.substr(startPos, 5); // get version
@@ -1881,10 +1887,10 @@ io.sockets.on('connection', function (appSocket) {
                         io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
                     }, 500);
                     io.sockets.emit('runStatus', 'running');
-
+					
 					//NAB - Added to support action to run befor job starts
                     doJobAction(config.jobOnStart);
-
+					
                     send1Q();
                 }
             }
@@ -1949,11 +1955,11 @@ io.sockets.on('connection', function (appSocket) {
             if (data.length > 2) {
                 feed = parseInt(data[2]);
                 if (feed) {
-                    feed = 'F' + feed;
+                    feed = 'F' + feed;   
                 }
             }
             if (dir && dist && feed) {
-                writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length);
+                writeLog('Adding jog commands to queue. blocked=' + blocked + ', paused=' + paused + ', Q=' + gcodeQueue.length, 1);
                 switch (firmware) {
                 case 'grbl':
                     addQ('$J=G91' + dir + dist + feed);
@@ -1979,10 +1985,16 @@ io.sockets.on('connection', function (appSocket) {
                     send1Q();
                     break;
                 case 'marlin':
-                case 'reprapfirmware':
                     addQ('G91');
                     addQ('G0 ' + feed +" "+ dir +" "+ dist);
                     addQ('G90');
+                    send1Q();
+                    break;
+                case 'reprapfirmware':
+                    addQ('M120');
+                    addQ('G91');
+                    addQ('G1 ' + dir + dist +" "+ feed);
+                    addQ('M121');
                     send1Q();
                     break;
                 default:
@@ -1990,7 +2002,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);    
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -2034,10 +2046,17 @@ io.sockets.on('connection', function (appSocket) {
                     send1Q();
                     break;
                 case 'marlin':
-                case 'reprapfirmware':
                     addQ('G9' + mode);
                     addQ('G0 ' + feed +" "+ xVal +" "+ yVal +" "+ zVal);
                     addQ('G90');
+                    send1Q();
+                    break;
+                case 'reprapfirmware':
+                    addQ('M120');
+                    addQ('G9' + mode);
+                    addQ('G1 ' + feed +" "+ xVal +" "+ yVal +" "+ zVal);
+                    addQ('G90');
+                    addQ('M121');
                     send1Q();
                     break;
                 default:
@@ -2045,7 +2064,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);
+                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);    
                 io.sockets.emit('data', 'Invalid jogTo() params!');
             }
         } else {
@@ -2173,6 +2192,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'marlinkimbra':
                     addQ('G28.2 X');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 X0');
+                    break;
                 case 'marlin':
                 case 'reprapfirmware':
                     addQ('G28 X');
@@ -2194,6 +2216,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'reprapfirmware':
                     addQ('G28 Y');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 Y0');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2211,6 +2236,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'reprapfirmware':
                     addQ('G28 Z');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 Z0');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2226,6 +2254,9 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 case 'marlin':
                     addQ('G28 E1'); // ????
+                    break;
+                case 'tinyg':
+                    addQ('G28.2 A0');
                     break;
                 default:
                     //not supported
@@ -2247,6 +2278,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'reprapfirmware':
                     addQ('G28 X Y Z');
                     break;
+                case 'tinyg':
+                    addQ('G28.2 X0 Y0 Z0');
+                    break;
                 default:
                     //not supported
                     appSocket.emit('error', 'Command not supported by firmware!');
@@ -2266,6 +2300,9 @@ io.sockets.on('connection', function (appSocket) {
                 case 'marlin':
                 case 'reprapfirmware':
                     addQ('G28 X Y Z E');
+                    break;
+                case 'tinyg':
+                    addQ('G28.2 X0 Y0 Z0 A0');
                     break;
                 default:
                     //not supported
@@ -2323,7 +2360,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-
+    
     appSocket.on('feedOverride', function (data) {
         if (isConnected) {
             switch (firmware) {
@@ -2768,10 +2805,10 @@ io.sockets.on('connection', function (appSocket) {
             blocked = false;
             paused = false;
             io.sockets.emit('runStatus', 'stopped');
-
+			
 			//NAB - Added to support action to run after job aborts
             doJobAction(config.jobOnAbort);
-
+			
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -2983,7 +3020,7 @@ io.sockets.on('connection', function (appSocket) {
             }
         }
     });
-
+    
     appSocket.on('clearAlarm', function (data) { // Clear Alarm
         if (isConnected) {
             data = parseInt(data);
@@ -3070,7 +3107,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-
+    
     appSocket.on('resetMachine', function () {
         if (isConnected) {
             writeLog(chalk.red('Reset Machine'), 1);
@@ -3101,7 +3138,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-
+    
     appSocket.on('closePort', function (data) { // Close machine port and dump queue
         if (isConnected) {
             switch (connectionType) {
@@ -3151,12 +3188,12 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-
+    
     appSocket.on('disconnect', function () { // App disconnected
         let id = connections.indexOf(appSocket);
         writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
         connections.splice(id, 1);
-    });
+    });    
 
 }); // End appSocket
 
@@ -3250,7 +3287,7 @@ function send1Q() {
                     gcodeLen = gcodeQueue[queuePointer].length;
                     if (gcodeLen < spaceLeft) {
                         // Add gcode to send buffer
-                        gcodeLine += gcodeQueue[queuePointer];
+                        gcodeLine += gcodeQueue[queuePointer]; 
                         queuePointer++;
                         spaceLeft -= gcodeLen;
                     } else {
@@ -3292,6 +3329,14 @@ function send1Q() {
                 writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
             }
             break;
+        case 'reprapfirmware':
+            while (reprapBufferSize > 0 && gcodeQueue.length > 0 && !blocked && !paused) {
+                gcode = gcodeQueue.shift();
+                machineSend(gcode + '\n');
+                reprapBufferSize--;
+                writeLog('Sent: ' + gcode + ' Q: ' + gcodeQueue.length, 2);
+            }
+            break;
         }
         var finishTime, elapsedTimeMS, elapsedTime, speed;
         if (startTime && (queuePointer - queuePos) >= 500) {
@@ -3325,9 +3370,9 @@ function send1Q() {
             startTime = null;
             runningJob = null;
             io.sockets.emit('runStatus', 'finished');
-
+			
 			//NAB - Added to support action to run after job completes
-            doJobAction(config.jobOnFinish);
+            doJobAction(config.jobOnFinish);			
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
@@ -3470,6 +3515,6 @@ if (electronApp) {
 
 }
 
-if (require.main === module) {
-    exports.LWCommServer(config);
+if (require.main === module) { 
+    exports.LWCommServer(config); 
 }
