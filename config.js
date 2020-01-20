@@ -4,9 +4,11 @@ const path = require('path');
 
 var config = {};
 
-config.webPort = process.env.WEB_PORT || 8000;
+config.webPort = process.env.WEB_PORT || 8002;
 config.serverVersion = '4.0.136';
 config.apiVersion = '4.0.7';
+//config.interface = 'Wi-Fi' //Windows Name
+//config.interface = 'wlan0' //linux name
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
 config.logLevel = process.env.LOG_LEVEL || 0;
