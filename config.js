@@ -4,7 +4,7 @@ const path = require('path');
 
 var config = {};
 
-config.webPort = process.env.WEB_PORT || 8002;
+config.webPort = process.env.WEB_PORT || 8000;
 config.serverVersion = '4.0.136';
 config.apiVersion = '4.0.7';
 //config.interface = 'Wi-Fi' //Windows Name
