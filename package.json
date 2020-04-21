@@ -71,14 +71,14 @@
       "**/*"
     ],
     "win": {
-      "icon": "app/favicon.ico"
+      "icon": ""
     },
     "mac": {
-      "icon": "build/icon.icns",
+      "icon": "",
       "category": "public.app-category.graphics-design"
     },
     "dmg": {
-      "icon": "build/icon.icns",
+      "icon": "",
       "contents": [
         {
           "x": 410,
