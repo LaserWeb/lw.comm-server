@@ -10,7 +10,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
+    "url": "git+https://github.com/janschiefer/lw.comm-server.git#fix-linux-build"
   },
   "devDependencies": {
     "copyfiles": "1.2.x",
@@ -49,7 +49,7 @@
     "nightlywindows32": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git pull && npm install && npm run distwinx86 && mkdir -p ../LaserWeb4-Binaries/windows && cp -f ./dist/*.exe ../LaserWeb4-Binaries/windows/",
     "nightlylinux64": "export USE_SYSTEM_XORRISO=true&&cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git pull && npm install && npm run distlinx64 && mkdir -p ../LaserWeb4-Binaries/linux && cp -f ./dist/*.AppImage ../LaserWeb4-Binaries/linux/",
     "nightlylinux32": "export USE_SYSTEM_XORRISO=true&&cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git pull && npm install && npm run distlinx86 && mkdir -p ../LaserWeb4-Binaries/linux && cp -f ./dist/*.AppImage ../LaserWeb4-Binaries/linux/"
-},
+  },
   "keywords": [
     "laserweb",
     "cncweb",
