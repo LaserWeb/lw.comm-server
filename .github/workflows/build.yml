@@ -62,7 +62,13 @@ jobs:
           cd ${GITHUB_WORKSPACE}/lw.comm-server
           ./node_modules/.bin/electron-rebuild
 
+      - name: Install xorriso
+        # XXX ldd /root/.cache/electron-builder/AppImage/AppImage-09-07-16-linux/xorriso
+        # libreadline.so.6 => not found
+        run: sudo apt-get install xorriso
+
       - name: Run dist target
         run: |
           cd ${GITHUB_WORKSPACE}/lw.comm-server
-          npm run dist
+          # XXX use xorriso instead of broken AppImage version
+          env USE_SYSTEM_XORRISO=true npm run dist
