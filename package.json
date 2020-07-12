@@ -45,8 +45,8 @@
     "distlinx86": "export USE_SYSTEM_XORRISO=true&& npm run copy && build --linux --ia32 ",
     "distlinx64": "export USE_SYSTEM_XORRISO=true&& npm run copy && build --linux --x64",
     "copy": "ncp ../LaserWeb4/dist/ app/ --limit=6",
-    "nightlywindows": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distwinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win64/ && cd .. && npm run distwinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win32/ && cd ../../LaserWeb4-Binaries",
-    "nightlylinux": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distlinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux64/ && cd .. && npm run distlinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux32/ && cd ../../LaserWeb4-Binaries"
+    "nightlywindows": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm ci && npm run distwinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win64/ && cd .. && npm run distwinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/win32/ && cd ../../LaserWeb4-Binaries",
+    "nightlylinux": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm ci && npm run distlinx64 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux64/ && cd .. && npm run distlinx86 && cd ./dist && mv *.exe ../../LaserWeb4-Binaries/linux32/ && cd ../../LaserWeb4-Binaries"
   },
   "keywords": [
     "laserweb",
