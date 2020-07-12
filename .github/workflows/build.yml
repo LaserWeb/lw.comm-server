@@ -1,0 +1,68 @@
+---
+name: Node.js CI
+on:
+  - push
+  - pull_request
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version:
+          - 10.x
+    steps:
+      - name: Install required packages
+        run: sudo apt-get install graphicsmagick xz-utils
+
+      - name: Checkout lw.comm-server
+        uses: actions/checkout@v2
+        with:
+          path: lw.comm-server
+
+      - name: Checkout LaserWeb4
+        uses: actions/checkout@v2
+        with:
+          repository: LaserWeb/LaserWeb4
+          path: LaserWeb4
+          ref: dev-es6
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Get npm cache directory
+        id: npm-cache
+        run: |
+          echo "::set-output name=dir::$(npm config get cache)"
+
+      - name: Cache npm
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.npm-cache.outputs.dir }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Build LaserWeb4
+        run: |
+          cd ${GITHUB_WORKSPACE}/LaserWeb4
+          npm ci
+          npm run installdev
+          npm run bundle-dev
+
+      - name: Run npm ci in lw.comm-server
+        run: |
+          cd ${GITHUB_WORKSPACE}/lw.comm-server
+          npm ci
+
+      - name: Rebuild electron
+        run: |
+          cd ${GITHUB_WORKSPACE}/lw.comm-server
+          ./node_modules/.bin/electron-rebuild
+
+      - name: Run dist target
+        run: |
+          cd ${GITHUB_WORKSPACE}/lw.comm-server
+          npm run dist
