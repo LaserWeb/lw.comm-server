@@ -16,15 +16,15 @@
     "copyfiles": "1.2.x",
     "electron": "2.0.x",
     "electron-builder": "14.5.x",
-    "electron-rebuild": "1.8.x",
+    "electron-rebuild": "^1.8.8",
     "ncp": "2.0.x"
   },
   "dependencies": {
-    "chalk": "*",
-    "dotenv": "8.x",
+    "chalk": "^3.0.0",
+    "dotenv": "^8.2.0",
     "node-static": "*",
     "request": "*",
-    "serialport": "6.2.2",
+    "serialport": "^6.2.2",
     "socket.io": "1.7.x",
     "ws": "^1.1.x"
   },
