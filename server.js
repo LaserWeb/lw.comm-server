@@ -2540,7 +2540,7 @@ io.sockets.on('connection', function (appSocket) {
                             laserTestOn = true;
                             appSocket.emit('laserTest', power);
                             if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
+                                addQ('G4 P' + duration);
                                 addQ('M5');
                                 laserTestOn = false;
                                 setTimeout(function () {
@@ -2556,7 +2556,7 @@ io.sockets.on('connection', function (appSocket) {
                             laserTestOn = true;
                             appSocket.emit('laserTest', power);
                             if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
+                                addQ('G4 P' + duration);
                                 addQ('M107');
                                 laserTestOn = false;
                                 setTimeout(function () {
@@ -2572,7 +2572,7 @@ io.sockets.on('connection', function (appSocket) {
                             laserTestOn = true;
                             appSocket.emit('laserTest', power);
                             if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
+                                addQ('G4 P' + duration);
                                 addQ('M106 S0');
                                 laserTestOn = false;
                                 setTimeout(function () {
