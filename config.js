@@ -1,10 +1,10 @@
-require('dotenv');
-//.load({silent: true});
+require('dotenv').config();
 const path = require('path');
 
 var config = {};
 
 config.webPort = process.env.WEB_PORT || 8000;
+config.IP = process.env.IP || '0.0.0.0';
 config.serverVersion = '4.0.136';
 config.apiVersion = '4.0.7';
 

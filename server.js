@@ -144,7 +144,7 @@ var app = http.createServer(function (req, res) {
         });
     }
 });
-app.listen(config.webPort);
+app.listen(config.webPort, config.IP);
 var io = websockets.listen(app);
 
 
