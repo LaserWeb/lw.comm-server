@@ -185,7 +185,11 @@ io.sockets.on('connection', function (appSocket) {
             appSocket.emit('activeIP', connectedTo);
         }
         if (runningJob) {
-            appSocket.emit('runningJob', runningJob);
+            finishTime = new Date(Date.now());
+            elapsedTimeMS = finishTime.getTime() - startTime.getTime();
+            elapsedTime = Math.round(elapsedTimeMS / 1000);
+            speed = (queuePointer / elapsedTime).toFixed(0);
+            appSocket.emit('runningJob', 'Currently running a Job. Gcode size: ' + runningJob.length + '. Queue done: ' + queuePointer + ' of ' + queueLen + ' (ave. ' + speed + ' lines/s)');
         }
     } else {
         appSocket.emit('connectStatus', 'Connect');

@@ -1,16 +1,18 @@
-require('dotenv').config();
+require('dotenv');
+//.load({silent: true});
 const path = require('path');
 
 var config = {};
 
 config.webPort = process.env.WEB_PORT || 8000;
 config.IP = process.env.IP || '0.0.0.0';
-config.serverVersion = '4.0.136';
-config.apiVersion = '4.0.7';
+config.serverVersion = '4.0.137';
+config.apiVersion = '4.0.8';
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
 config.logLevel = process.env.LOG_LEVEL || 0;
 config.resetOnConnect = process.env.RESET_ON_CONNECT || 0;
+config.queryString = process.env.QUERY_STRING || '$I';
 
 config.posDecimals = process.env.DRO_DECIMALS || 2;
 config.firmwareWaitTime = process.env.FIRMWARE_WAIT_TIME || 10;
