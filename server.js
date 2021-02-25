@@ -71,6 +71,7 @@ var queueLen;
 var queuePos = 0;
 var queuePointer = 0;
 var readyToSend = true;
+var jobRequestIP;
 
 var optimizeGcode = false;
 
@@ -185,11 +186,11 @@ io.sockets.on('connection', function (appSocket) {
             appSocket.emit('activeIP', connectedTo);
         }
         if (runningJob) {
-            finishTime = new Date(Date.now());
-            elapsedTimeMS = finishTime.getTime() - startTime.getTime();
-            elapsedTime = Math.round(elapsedTimeMS / 1000);
-            speed = (queuePointer / elapsedTime).toFixed(0);
-            appSocket.emit('runningJob', 'Currently running a Job. Gcode size: ' + runningJob.length + '. Queue done: ' + queuePointer + ' of ' + queueLen + ' (ave. ' + speed + ' lines/s)');
+            let currentTime = new Date(Date.now());
+            let elapsedTimeMS = currentTime.getTime() - startTime.getTime();
+            let elapsedTime = Math.round(elapsedTimeMS / 1000);
+            let speed = (queuePointer / elapsedTime).toFixed(0);
+            appSocket.emit('runningJob', '<strong>Server Busy:</strong><br/>Current job started @ ' + startTime.toLocaleTimeString() + ' on ' + startTime.toLocaleDateString() + ' from ' + jobRequestIP + '<br/>Queue: ' + queuePointer + ' done of ' + queueLen + ' (ave. ' + speed + ' lines/s)');
         }
     } else {
         appSocket.emit('connectStatus', 'Connect');
@@ -1824,6 +1825,7 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             if (data) {
                 runningJob = data;
+                jobRequestIP = appSocket.request.connection.remoteAddress;
                 data = data.split('\n');
                 for (var i = 0; i < data.length; i++) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
@@ -2766,6 +2768,7 @@ io.sockets.on('connection', function (appSocket) {
             laserTestOn = false;
             startTime = null;
             runningJob = null;
+            jobRequestIP = null;
             blocked = false;
             paused = false;
             io.sockets.emit('runStatus', 'stopped');
@@ -3333,6 +3336,7 @@ function send1Q() {
             queuePos = 0;
             startTime = null;
             runningJob = null;
+            jobRequestIP = null;
             io.sockets.emit('runStatus', 'finished');
 			
 			//NAB - Added to support action to run after job completes
