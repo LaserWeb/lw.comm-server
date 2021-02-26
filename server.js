@@ -186,11 +186,15 @@ io.sockets.on('connection', function (appSocket) {
             appSocket.emit('activeIP', connectedTo);
         }
         if (runningJob) {
-            let currentTime = new Date(Date.now());
-            let elapsedTimeMS = currentTime.getTime() - startTime.getTime();
-            let elapsedTime = Math.round(elapsedTimeMS / 1000);
-            let speed = (queuePointer / elapsedTime).toFixed(0);
-            appSocket.emit('runningJob', '<strong>Server Busy:</strong><br/>Current job started @ ' + startTime.toLocaleTimeString() + ' on ' + startTime.toLocaleDateString() + ' from ' + jobRequestIP + '<br/>Queue: ' + queuePointer + ' done of ' + queueLen + ' (ave. ' + speed + ' lines/s)');
+            if (config.returnRunningJob) {
+                appSocket.emit('runningJob', runningJob);
+            } else {
+                let currentTime = new Date(Date.now());
+                let elapsedTimeMS = currentTime.getTime() - startTime.getTime();
+                let elapsedTime = Math.round(elapsedTimeMS / 1000);
+                let speed = (queuePointer / elapsedTime).toFixed(0);
+                appSocket.emit('runningJob', '<strong>Server Busy:</strong><br/>Current job started @ ' + startTime.toLocaleTimeString() + ' on ' + startTime.toLocaleDateString() + ' from ' + jobRequestIP + '<br/>Queue: ' + queuePointer + ' done of ' + queueLen + ' (ave. ' + speed + ' lines/s)');
+            }
         }
     } else {
         appSocket.emit('connectStatus', 'Connect');
