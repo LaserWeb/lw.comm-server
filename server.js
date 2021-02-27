@@ -289,11 +289,18 @@ io.sockets.on('connection', function (appSocket) {
     });
 
     appSocket.on('connectTo', function (data) { // If a user picks a port to connect to, open a Node SerialPort Instance to it
-        data = data.split(',');
+        data = splitN(data, /,/g, 4);
+        let reset = false;
+        let query = '';
         writeLog(chalk.yellow('INFO: ') + chalk.blue('Connecting to ' + data), 1);
         if (!isConnected) {
             connectionType = data[0].toLowerCase();
+            if (data.length >= 4) reset = data[3];
+            else if (config.resetOnConnect == 1) reset = true;
+            if (data.length >= 5) query = data[4];
+            else query = config.queryString;
             firmware = false;
+
             switch (connectionType) {
             case 'usb':
                 port = new SerialPort(data[1], {
@@ -307,11 +314,16 @@ io.sockets.on('connection', function (appSocket) {
                 port.on('open', function () {
                     io.sockets.emit('activePort', {port: port.path, baudrate: port.settings.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
-                    if (config.resetOnConnect == 1) {
-                        port.write(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                    if (reset == "true") {
+                        port.write(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
                         machineSend('\n'); // this causes smoothie to send the welcome string
+                        writeLog('Sent: \\n', 1);
+                    }
+                    if (query.length > 0) {
+                        machineSend(query + '\n');
+                        writeLog('Sent: ' + query, 1);
                     }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
@@ -891,11 +903,16 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('connect', function (prompt) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    if (config.resetOnConnect == 1) {
-                        machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                    if (reset == "true") {
+                        machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
                         machineSend('\n'); // this causes smoothie to send the welcome string
+                        writeLog('Sent: \\n', 1);
+                    }
+                    if (query.length > 0) {
+                        machineSend(query + '\n');
+                        writeLog('Sent: ' + query, 1);
                     }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
@@ -1339,11 +1356,16 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    if (config.resetOnConnect == 1) {
+                    if (reset == "true") {
                         machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
                         machineSend('\n'); // this causes smoothie to send the welcome string
+                        writeLog('Sent: \\n', 1);
+                    }
+                    if (query.length > 0) {
+                        machineSend(query + '\n');
+                        writeLog('Sent: ' + query, 1);
                     }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
@@ -3390,6 +3412,18 @@ function writeLog(line, verb) {
         line = line.split(String.fromCharCode(0x1B) + '[94m').join('');
         logFile.write(time + ' ' + line + '\r\n');
     }
+}
+
+// Splits 'string' according to 'sep' (regex), but only 'n+1' times
+// see: https://stackoverflow.com/questions/29998343/
+
+function splitN(str, sep, n) {
+    var out = [];
+
+    while(n--) out.push(str.slice(sep.lastIndex, sep.exec(str).index));
+
+    out.push(str.slice(sep.lastIndex));
+    return out;
 }
 
 //Handles performing any pre/post/abort actions
