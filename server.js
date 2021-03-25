@@ -98,11 +98,13 @@ var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
 
 require('dns').lookup(require('os').hostname(), function (err, add, fam) {
+    let myIP = config.IP;
+    if (myIP == "0.0.0.0") myIP = "localhost";
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
     writeLog(chalk.white('        ---- LaserWeb Comm Server ' + config.serverVersion + ' ----        '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
-    writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
+    writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + myIP + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
     writeLog(chalk.green('***************************************************************'));
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.red('* Updates: '), 0);
@@ -113,7 +115,7 @@ require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.red('* Support: '), 0);
     writeLog(chalk.green('  If you need help / support, come over to '), 0);
-    writeLog(chalk.green('  ') + chalk.yellow('https://plus.google.com/communities/115879488566665599508'), 0);
+    writeLog(chalk.green('  ') + chalk.yellow('https://forum.makerforums.info/c/laserweb-cncweb/'), 0);
     writeLog(chalk.green('***************************************************************'), 0);
     writeLog(chalk.green(' '), 0);
 });
@@ -145,6 +147,8 @@ var app = http.createServer(function (req, res) {
         });
     }
 });
+
+writeLog(chalk.yellow('Binding to IP: ' + config.IP + ' on port: ' + config.webPort), 1);
 app.listen(config.webPort, config.IP);
 var io = websockets.listen(app);
 
@@ -157,14 +161,16 @@ io.sockets.on('connection', function (appSocket) {
     writeLog(chalk.yellow('App connected! (id=' + connections.indexOf(appSocket) + ')'), 1);
 
     // send supported interfaces
+    writeLog(chalk.yellow('Connect (' + connections.indexOf(appSocket) + ') ') + chalk.blue('Sending Interfaces list: ' + supportedInterfaces), 1);
     appSocket.emit('interfaces', supportedInterfaces);
 
     // check available ports
     serialport.list(function (err, ports) {
         portsList = ports;
+        writeLog(chalk.yellow('Connect(' + connections.indexOf(appSocket) + ') ') + chalk.blue('Sending Ports list: ' + JSON.stringify(ports)), 1);
         appSocket.emit('ports', portsList);
     });
-    // reckeck ports every 2s
+    // recheck ports every 2s
     listPortsLoop = setInterval(function () {
         serialport.list(function (err, ports) {
             if (JSON.stringify(ports) != JSON.stringify(portsList)) {
