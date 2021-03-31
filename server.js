@@ -198,8 +198,11 @@ io.sockets.on('connection', function (appSocket) {
                 let currentTime = new Date(Date.now());
                 let elapsedTimeMS = currentTime.getTime() - startTime.getTime();
                 let elapsedTime = Math.round(elapsedTimeMS / 1000);
-                let speed = (queuePointer / elapsedTime).toFixed(0);
-                appSocket.emit('runningJob', 'Running job started @ ' + startTime.toLocaleTimeString() + ' on ' + startTime.toLocaleDateString() + ' from ' + jobRequestIP + '<br/>Queue: ' + queuePointer + ' done of ' + queueLen + ' (ave. ' + speed + ' lines/s)');
+                let speed = (queuePointer / elapsedTime);
+                if (speed >= 100) speed = speed.toFixed(0);
+                else speed = speed.toPrecision(3);
+                let pct = ((queuePointer / queueLen) * 100).toFixed(1);
+                appSocket.emit('runningJob', 'Running job started @ ' + startTime.toLocaleTimeString() + ' on ' + startTime.toLocaleDateString() + ' from ' + jobRequestIP + '<br/>Queue: ' + queuePointer + ' done of ' + queueLen + ' (' + pct + '%, ave. ' + speed + ' lines/s)');
             }
         }
     } else {
@@ -3343,8 +3346,11 @@ function send1Q() {
             finishTime = new Date(Date.now());
             elapsedTimeMS = finishTime.getTime() - startTime.getTime();
             elapsedTime = Math.round(elapsedTimeMS / 1000);
-            speed = (queuePointer / elapsedTime).toFixed(0);
-            writeLog('Done: ' + queuePointer + ' of ' + queueLen + ' (ave. ' + speed + ' lines/s)', 1);
+            speed = (queuePointer / elapsedTime);
+            if (speed >= 100) speed = speed.toFixed(0);
+            else speed = speed.toPrecision(3);
+            let pct = ((queuePointer / queueLen) * 100).toFixed(1);
+            writeLog('Done: ' + queuePointer + ' of ' + queueLen + ' (' + pct + '%, ave. ' + speed + ' lines/s)', 1);
         }
         if (queuePointer >= gcodeQueue.length) {
             clearInterval(queueCounter);
@@ -3353,7 +3359,9 @@ function send1Q() {
                 finishTime = new Date(Date.now());
                 elapsedTimeMS = finishTime.getTime() - startTime.getTime();
                 elapsedTime = Math.round(elapsedTimeMS / 1000);
-                speed = (queuePointer / elapsedTime).toFixed(0);
+                speed = (queuePointer / elapsedTime);
+                if (speed >= 100) speed = speed.toFixed(0);
+                else speed = speed.toPrecision(3);
                 writeLog("Job started at " + startTime.toString(), 1);
                 writeLog("Job finished at " + finishTime.toString(), 1);
                 writeLog("Elapsed time: " + elapsedTime + " seconds.", 1);
