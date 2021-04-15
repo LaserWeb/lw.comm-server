@@ -71,7 +71,7 @@
       "**/*"
     ],
     "win": {
-      "icon": "app/favicon.ico"
+      "icon": "build/icon.icns"
     },
     "mac": {
       "icon": "build/icon.icns",
