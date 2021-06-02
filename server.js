@@ -112,7 +112,7 @@ require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.red('* Support: '), 0);
     writeLog(chalk.green('  If you need help / support, come over to '), 0);
-    writeLog(chalk.green('  ') + chalk.yellow('https://plus.google.com/communities/115879488566665599508'), 0);
+    writeLog(chalk.green('  ') + chalk.yellow('https://forum.makerforums.info/c/laserweb-cncweb/78'), 0);
     writeLog(chalk.green('***************************************************************'), 0);
     writeLog(chalk.green(' '), 0);
 });
