@@ -44,6 +44,7 @@ const request = require('request'); // proxy for remote webcams
 const grblStrings = require('./grblStrings.js');
 const firmwareFeatures = require('./firmwareFeatures.js');
 const { exec } = require('child_process'); //Support for running OS commands before and after jobs
+const dns = require('dns');
 
 exports.LWCommServer=function(config){
 
@@ -96,12 +97,34 @@ var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
 
-require('dns').lookup(require('os').hostname(), function (err, add, fam) {
+//Get a listing of all interfaces on system
+var interfaces = os.networkInterfaces();
+
+if (config.interface != null) { //If the interface name is set in the config file
+    const interfaces = os.networkInterfaces();
+    Object.keys(interfaces).forEach((netInterface) => {
+        if (netInterface == config.interface) {
+            interfaces[netInterface].forEach((interfaceObject) => {
+                if (interfaceObject.family === 'IPv4' && !interfaceObject.internal) {
+                    start_server(interfaceObject.address);
+                }
+            });
+        }
+    });
+} else {
+    //Use hostname vs interface property from config.js
+    dns.lookup(os.hostname(), function (err, add, fam) {
+        start_server(add);
+    });
+}
+
+
+function start_server(address) {
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
     writeLog(chalk.white('        ---- LaserWeb Comm Server ' + config.serverVersion + ' ----        '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
-    writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
+    writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + address + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
     writeLog(chalk.green('***************************************************************'));
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.red('* Updates: '), 0);
@@ -115,7 +138,7 @@ require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green('  ') + chalk.yellow('https://forum.makerforums.info/c/laserweb-cncweb/78'), 0);
     writeLog(chalk.green('***************************************************************'), 0);
     writeLog(chalk.green(' '), 0);
-});
+}
 
 
 // Init webserver
