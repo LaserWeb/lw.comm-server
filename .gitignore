@@ -41,6 +41,7 @@ ehthumbs.db
 Thumbs.db
 *~
 node_modules
+dist
 
 # Local settings #
 ##################
