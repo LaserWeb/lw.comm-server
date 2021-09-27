@@ -57,7 +57,7 @@ var port, parser, isConnected, connectedTo, portsList;
 var machineSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
-var statusLoop, queueCounter, listPortsLoop;
+var statusLoop, queueCounter, listPortsLoop = false;
 var lastSent = '', paused = false, blocked = false;
 
 var firmware, fVersion, fDate;
@@ -164,15 +164,17 @@ io.sockets.on('connection', function (appSocket) {
         appSocket.emit('ports', portsList);
     });
     // reckeck ports every 2s
-    listPortsLoop = setInterval(function () {
-        serialport.list(function (err, ports) {
-            if (JSON.stringify(ports) != JSON.stringify(portsList)) {
-                portsList = ports;
-                io.sockets.emit('ports', ports);
-                writeLog(chalk.yellow('Ports changed: ' + JSON.stringify(ports)), 1);
-            }
-        });
-    }, 2000);
+    if (!listPortsLoop) {
+        listPortsLoop = setInterval(function () {
+            serialport.list(function (err, ports) {
+                if (JSON.stringify(ports) != JSON.stringify(portsList)) {
+                    portsList = ports;
+                    io.sockets.emit('ports', ports);
+                    writeLog(chalk.yellow('Ports changed: ' + JSON.stringify(ports)), 1);
+                }
+            });
+        }, 2000);
+    }
 
     if (isConnected) {
         appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
