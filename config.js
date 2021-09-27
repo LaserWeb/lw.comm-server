@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config(); //load({silent: true});
 const path = require('path');
 
 var config = {};

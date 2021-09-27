@@ -13,11 +13,11 @@
     "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
   },
   "devDependencies": {
-    "copyfiles": "1.2.x",
-    "electron": "2.0.x",
-    "electron-builder": "^14.5.x",
-    "electron-rebuild": "1.8.x",
-    "ncp": "2.0.x"
+    "copyfiles": "^1.2.0",
+    "electron": "^1.8.8",
+    "electron-builder": "^14.5.3",
+    "electron-rebuild": "^1.10.1",
+    "ncp": "^2.0.0"
   },
   "dependencies": {
     "chalk": "*",
@@ -25,14 +25,14 @@
     "hdiutil": "0.0.6",
     "node-static": "*",
     "request": "*",
-    "serialport": "6.2.2",
-    "socket.io": "1.7.x",
-    "ws": "^1.1.x"
+    "serialport": "^6.2.2",
+    "socket.io": "1.7.4",
+    "ws": "1.1.5"
   },
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
   },
-  "homepage": "https://github.com/LaserWeb/lw.comm-server#readme",
+  "homepage": "https://laserweb.yurl.ch",
   "main": "server.js",
   "scripts": {
     "start": "echo \"Please run 'npm run dist' to create a local installer, or run 'npm run nightlylinux' or 'npm run nightlywindows' to build distributable installers for each platform\" ",
@@ -73,13 +73,7 @@
       "**/*"
     ],
     "win": {
-      "icon": "app/icon.256x256.ico"
-    },
-    "linux": {
-      "icon": "app/app-icons",
-      "target": [
-        "AppImage"
-      ]
+      "icon": "app/icon.ico"
     },
     "mac": {
       "icon": "app/icons.icns",
@@ -101,5 +95,6 @@
         }
       ]
     }
-  }
+  },
+  "postinstall": "electron-builder install-app-deps"
 }
