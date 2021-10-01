@@ -57,7 +57,7 @@ var port, parser, isConnected, connectedTo, portsList;
 var machineSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
-var statusLoop, queueCounter, listPortsLoop;
+var statusLoop, queueCounter, listPortsLoop = false;
 var lastSent = '', paused = false, blocked = false;
 
 var firmware, fVersion, fDate;
@@ -112,7 +112,7 @@ require('dns').lookup(require('os').hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.red('* Support: '), 0);
     writeLog(chalk.green('  If you need help / support, come over to '), 0);
-    writeLog(chalk.green('  ') + chalk.yellow('https://plus.google.com/communities/115879488566665599508'), 0);
+    writeLog(chalk.green('  ') + chalk.yellow('https://forum.makerforums.info/c/laserweb-cncweb/78'), 0);
     writeLog(chalk.green('***************************************************************'), 0);
     writeLog(chalk.green(' '), 0);
 });
@@ -144,7 +144,7 @@ var app = http.createServer(function (req, res) {
         });
     }
 });
-app.listen(config.webPort);
+app.listen(config.webPort, config.IP);
 var io = websockets.listen(app);
 
 
@@ -164,15 +164,17 @@ io.sockets.on('connection', function (appSocket) {
         appSocket.emit('ports', portsList);
     });
     // reckeck ports every 2s
-    listPortsLoop = setInterval(function () {
-        serialport.list(function (err, ports) {
-            if (JSON.stringify(ports) != JSON.stringify(portsList)) {
-                portsList = ports;
-                io.sockets.emit('ports', ports);
-                writeLog(chalk.yellow('Ports changed: ' + JSON.stringify(ports)), 1);
-            }
-        });
-    }, 2000);
+    if (!listPortsLoop) {
+        listPortsLoop = setInterval(function () {
+            serialport.list(function (err, ports) {
+                if (JSON.stringify(ports) != JSON.stringify(portsList)) {
+                    portsList = ports;
+                    io.sockets.emit('ports', ports);
+                    writeLog(chalk.yellow('Ports changed: ' + JSON.stringify(ports)), 1);
+                }
+            });
+        }, 2000);
+    }
 
     if (isConnected) {
         appSocket.emit('firmware', {firmware: firmware, version: fVersion, date: fDate});
@@ -2540,7 +2542,7 @@ io.sockets.on('connection', function (appSocket) {
                             laserTestOn = true;
                             appSocket.emit('laserTest', power);
                             if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
+                                addQ('G4 P' + duration);
                                 addQ('M5');
                                 laserTestOn = false;
                                 setTimeout(function () {
@@ -2556,7 +2558,7 @@ io.sockets.on('connection', function (appSocket) {
                             laserTestOn = true;
                             appSocket.emit('laserTest', power);
                             if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
+                                addQ('G4 P' + duration);
                                 addQ('M107');
                                 laserTestOn = false;
                                 setTimeout(function () {
@@ -2572,7 +2574,7 @@ io.sockets.on('connection', function (appSocket) {
                             laserTestOn = true;
                             appSocket.emit('laserTest', power);
                             if (duration > 0) {
-                                addQ('G4 P' + duration / 1000);
+                                addQ('G4 P' + duration);
                                 addQ('M106 S0');
                                 laserTestOn = false;
                                 setTimeout(function () {
