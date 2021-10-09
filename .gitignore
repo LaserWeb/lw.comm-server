@@ -42,6 +42,10 @@ Thumbs.db
 *~
 node_modules
 
+# Electron stuff #
+##################
+dist
+
 # Local settings #
 ##################
 .env

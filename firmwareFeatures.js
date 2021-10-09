@@ -49,6 +49,22 @@ var featuresTinyG = {
     aAxes: false
 };
 
+var featuresRepetier = {
+    pause: true,
+    resume: true,
+    stop: true,
+    reset: true,
+    home: true,
+    disableMotors: true,
+    feedOverride: false,
+    spindleOverride: false,
+    dynamicPwmM4: false,
+    xAxes: true,
+    yAxes: true,
+    zAxes: true,
+    aAxes: false
+};
+
 var featuresMarlinkimbra = {
     pause: true,
     resume: true,
@@ -65,7 +81,7 @@ var featuresMarlinkimbra = {
     aAxes: false
 };
 
-var featuresRepetier = {
+var featuresMarlin = {
     pause: true,
     resume: true,
     stop: true,
@@ -74,6 +90,22 @@ var featuresRepetier = {
     disableMotors: true,
     feedOverride: false,
     spindleOverride: false,
+    dynamicPwmM4: false,
+    xAxes: true,
+    yAxes: true,
+    zAxes: true,
+    aAxes: false
+};
+
+var featuresRepRapFirmware = {
+    pause: true,
+    resume: true,
+    stop: true,
+    reset: true,
+    home: true,
+    disableMotors: true,
+    feedOverride: true,
+    spindleOverride: true,
     dynamicPwmM4: false,
     xAxes: true,
     yAxes: true,
@@ -105,10 +137,14 @@ exports.get = function (firmware) {
             return featuresSmoothie;
         case 'tinyg':
             return featuresTyinG;
-        case 'marlinkimbra':
-            return featuresMarlinkimbra;
         case 'repetier':
             return featuresRepetier;
+        case 'marlinkimbra':
+            return featuresMarlinkimbra;
+        case 'marlin':
+            return featuresMarlin;
+        case 'reprapfirmware':
+            return featuresRepRapFirmware;
         default:
             return featuresNone;
     }
