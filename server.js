@@ -281,7 +281,7 @@ io.sockets.on('connection', function (appSocket) {
     appSocket.on('getJobHistory', function () { // Deliver config of server (incl. versions)
         writeLog(chalk.yellow('INFO: ') + chalk.blue('Requesting Job History '), 1);
         var files = fs.readdirSync('./history');
-        appSocket.emit('jobHistory', jobs);
+        appSocket.emit('jobHistory', files);
     });
 
     appSocket.on('getRunningJob', function (data) { // Deliver running Job to Web-Client
@@ -1829,13 +1829,15 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             if (data) {
                 if (config.jobHistory) {
-                    var filename = './history/' + moment().format('YYYY-MM-DD_hh-mm-ss');;
+                    var dir = './history';
+                    if (!fs.existsSync(dir)){
+                        fs.mkdirSync(dir);
+                    }
+                    var filename = dir + "/" + moment().format('YYYY-MM-DD_hh-mm-ss');;
                     var jobFile = fs.createWriteStream(filename + '.gcode');
                     jobFile.write(data);
                     jobFile.close;
                     writeLog('Job-File written to ' + filename, 1);
-                } else {
-                    writeLog('Job-History is false', 1);
                 }
                 runningJob = data;
                 data = data.split('\n');
