@@ -23,6 +23,7 @@
     "chalk": "*",
     "dotenv": "8.x",
     "hdiutil": "0.0.6",
+    "moment": "^2.29.1",
     "node-static": "*",
     "request": "*",
     "serialport": "^6.2.2",
