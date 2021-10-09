@@ -6,7 +6,7 @@ var config = {};
 
 config.webPort = process.env.WEB_PORT || 8000;
 config.IP = process.env.IP || '0.0.0.0';
-config.serverVersion = '4.0.137';
+config.serverVersion = '4.0.138';
 config.apiVersion = '4.0.7';
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
