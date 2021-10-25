@@ -1,0 +1,73 @@
+<div id='top'></div>
+
+<style>
+    .connection-bar label:first-child {
+        margin-right: 4px;
+    }
+
+    .connection-bar label {
+        margin: 4px;
+    }
+
+    .connection-bar select {
+        margin: 4px;
+    }
+
+    .connection-bar button {
+        width: 100px;
+    }
+
+    .log {
+        overflow-y: scroll;
+        background: #ffffff;
+        border: 1px solid #ccc;
+        margin-bottom: 4px;
+    }
+
+    .log>div {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .log code {
+        display: block;
+        background: none;
+        color: black;
+        padding-left: 1em;
+        margin-left: 0.25em
+    }
+
+    .log code i {
+        margin-left: -1em
+    }
+
+    .log code.danger {
+        background: #fee
+    }
+
+    .log code.danger i {
+        color: red
+    }
+
+    .log code.warning {
+        background: #ffa
+    }
+
+    .log code.warning i {
+        color: #f90
+    }
+
+    .log code.success {
+        background: #efe
+    }
+
+    .log code.success i {
+        color: #0a0
+    }
+
+    .log details {
+        display: inline-block
+    }
+</style>
+
+<script src='index.js'></script>

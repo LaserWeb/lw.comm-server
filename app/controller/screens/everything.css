@@ -1,0 +1,60 @@
+* {
+    cursor: default;
+    user-select: none;
+}
+
+.nomouse {
+    pointer-events: none;
+}
+
+.true .hide-true, .true.hide-true {
+    visibility: hidden;
+}
+
+.false .hide-false, .false.hide-false {
+    visibility: hidden;
+}
+
+.control-button .background {
+    fill: #00ffff;
+}
+
+.control-button .border {
+    fill: none;
+}
+
+.control-button:hover .border {
+    fill: #0000ff;
+}
+
+.control-button-disabled-background {
+    fill: #00c0c0;
+}
+
+.action-jog.index-1 {
+    fill: #00ffff;
+}
+
+.action-jog.index-2 {
+    fill: #00c0ff;
+}
+
+.action-jog.index-3 {
+    fill: #0080ff;
+}
+
+.action-jog:hover {
+    fill: #ff0000;
+}
+
+.axis-button:hover .background {
+    fill: #0080ff;
+}
+
+.axis-button .background {
+    fill: #ffffff;
+}
+
+.axis-button:hover text {
+    fill: #ffffff;
+}
