@@ -48,6 +48,10 @@ ehthumbs.db
 Thumbs.db
 *~
 
+# Electron stuff #
+##################
+dist
+
 # Local settings #
 ##################
 .env
