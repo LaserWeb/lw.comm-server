@@ -1864,22 +1864,6 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }
                         }
-                        if (polarTransformation) {
-                            writeLog('Before: ' + tosend, 1);
-                            if (tosend.indexOf('X') >= 0) {
-                                lastX = parseFloat(tosend.substr(tosend.indexOf('X')+1));
-                            }
-                            if (tosend.indexOf('Y') >= 0) {
-                                lastY = parseFloat(tosend.substr(tosend.indexOf('Y')+1));
-                            }
-                            if (tosend.indexOf('X') >= 0 || tosend.indexOf('Y') >= 0) {
-                                var point = polarTransform(lastX, lastY);
-                                writeLog('polarTransform(' + lastX + ', ' + lastY + ') = ' + point.x + '/' + point.y, 1);
-                                tosend = tosend.replace('X'+lastX, 'X'+point.x);
-                                tosend = tosend.replace('Y'+lastY, 'Y'+point.y);
-                            }
-                            writeLog('After: ' + tosend, 1);
-                        }
                         addQ(tosend);
                     }
                 }
@@ -1909,35 +1893,62 @@ io.sockets.on('connection', function (appSocket) {
         io.sockets.emit('gcodeQueue', gcodeQueue);
     });
 
-    appSocket.on('runCommand', function (data) {
-        writeLog(chalk.red('Run Command (' + data.replace('\n', '|') + ')'), 1);
+    appSocket.on('runJob', function (data) {
+        writeLog('Run Job (' + data.length + ')', 1);
         if (isConnected) {
             if (data) {
+                runningJob = data;
                 data = data.split('\n');
                 for (var i = 0; i < data.length; i++) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
                     var tosend = line[0].trim();
                     if (tosend.length > 0) {
-                        if(polarTransformation) {
-                            writeLog(tosend, 1);
-                            if (tosend.indexOf('X') >= 0) {
-                                lastX = parseFloat(tosend.substr(tosend.indexOf('X')+1));
+                        if (optimizeGcode) {
+                            var newMode;
+                            if (tosend.indexOf('G0') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G0';
+                            } else if (tosend.indexOf('G1') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G1';
+                            } else if (tosend.indexOf('G2') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G2';
+                            } else if (tosend.indexOf('G3') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                                newMode = 'G3';
+                            } else if (tosend.indexOf('X') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('Y') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('Z') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
+                            } else if (tosend.indexOf('A') === 0) {
+                                tosend = tosend.replace(/\s+/g, '');
                             }
-                            if (tosend.indexOf('Y') >= 0) {
-                                lastY = parseFloat(tosend.substr(tosend.indexOf('Y')+1));
-                            }
-                            if (tosend.indexOf('X') >= 0 || tosend.indexOf('Y') >= 0) {
-                                var point = polarTransform(lastX, lastY);
-                                writeLog('polarTransform(' + lastX + ', ' + lastY + ') = ' + point.x + '/' + point.y, 1);
-                                tosend = tosend.replace('X'+lastX, 'X'+point.x);
-                                tosend = tosend.replace('Y'+lastY, 'Y'+point.y);
+                            if (newMode) {
+                                if (newMode === lastMode) {
+                                    tosend.substr(2);
+                                } else {
+                                    lastMode = newMode;
+                                }
                             }
                         }
+                        //console.log(line);
                         addQ(tosend);
                     }
                 }
                 if (i > 0) {
-                    //io.sockets.emit('runStatus', 'running');
+                    startTime = new Date(Date.now());
+                    // Start interval for qCount messages to socket clients
+                    queueCounter = setInterval(function () {
+                        io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
+                    }, 500);
+                    io.sockets.emit('runStatus', 'running');
+					
+					//NAB - Added to support action to run befor job starts
+                    doJobAction(config.jobOnStart);
+					
                     send1Q();
                 }
             }
@@ -1947,7 +1958,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-
+ 
     appSocket.on('jog', function (data) {
         writeLog(chalk.red('Jog ' + data), 1);
         if (isConnected) {
