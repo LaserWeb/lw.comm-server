@@ -34,6 +34,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const net = require('net');
 const os = require('os');
+const dns = require('dns');
 const fs = require('fs');
 const path = require('path');
 const nstatic = require('node-static');
@@ -96,7 +97,7 @@ var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
 
-require('dns').lookup(require('os').hostname(), function (err, add, fam) {
+dns.lookup(os.hostname(), function (err, add, fam) {
     writeLog(chalk.green(' '), 0);
     writeLog(chalk.green('***************************************************************'), 0);
     writeLog(chalk.white('        ---- LaserWeb Comm Server ' + config.serverVersion + ' ----        '), 0);
