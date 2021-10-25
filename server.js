@@ -298,7 +298,7 @@ io.sockets.on('connection', function (appSocket) {
                 port = new SerialPort(data[1], {
                     baudRate: parseInt(data[2].replace('baud',''))
                 });
-        		parser = new Readline({ delimiter: '\n' });
+		        parser = new Readline({ delimiter: '\n' });
 		        port.pipe(parser);
                 io.sockets.emit('connectStatus', 'opening:' + port.path);
 
@@ -1823,71 +1823,6 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('runJob', function (data) {
-        writeLog('Run Job (' + data.length + ')', 1);
-        if (isConnected) {
-            if (data) {
-                runningJob = data;
-                data = data.split('\n');
-                for (var i = 0; i < data.length; i++) {
-                    var line = data[i].split(';'); // Remove everything after ; = comment
-                    var tosend = line[0].trim();
-                    if (tosend.length > 0) {
-                        if (optimizeGcode) {
-                            var newMode;
-                            if (tosend.indexOf('G0') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G0';
-                            } else if (tosend.indexOf('G1') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G1';
-                            } else if (tosend.indexOf('G2') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G2';
-                            } else if (tosend.indexOf('G3') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                                newMode = 'G3';
-                            } else if (tosend.indexOf('X') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            } else if (tosend.indexOf('Y') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            } else if (tosend.indexOf('Z') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            } else if (tosend.indexOf('A') === 0) {
-                                tosend = tosend.replace(/\s+/g, '');
-                            }
-                            if (newMode) {
-                                if (newMode === lastMode) {
-                                    tosend.substr(2);
-                                } else {
-                                    lastMode = newMode;
-                                }
-                            }
-                        }
-                        addQ(tosend);
-                    }
-                }
-                if (i > 0) {
-                    startTime = new Date(Date.now());
-                    // Start interval for qCount messages to socket clients
-                    queueCounter = setInterval(function () {
-                        io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
-                    }, 500);
-                    io.sockets.emit('runStatus', 'running');
-					
-					//NAB - Added to support action to run befor job starts
-                    doJobAction(config.jobOnStart);
-					
-                    send1Q();
-                }
-            }
-        } else {
-            io.sockets.emit("connectStatus", 'closed');
-            io.sockets.emit('connectStatus', 'Connect');
-            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
-        }
-    });
-
     appSocket.on('currentQueue', function (data) {
         writeLog(chalk.red('Sending GCODE queue to Frontend'));
         io.sockets.emit('gcodeQueue', gcodeQueue);
@@ -1958,7 +1893,31 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
- 
+
+    appSocket.on('runCommand', function (data) {
+        writeLog(chalk.red('Run Command (' + data.replace('\n', '|') + ')'), 1);
+        if (isConnected) {
+            if (data) {
+                data = data.split('\n');
+                for (var i = 0; i < data.length; i++) {
+                    var line = data[i].split(';'); // Remove everything after ; = comment
+                    var tosend = line[0].trim();
+                    if (tosend.length > 0) {
+                        addQ(tosend);
+                    }
+                }
+                if (i > 0) {
+                    //io.sockets.emit('runStatus', 'running');
+                    send1Q();
+                }
+            }
+        } else {
+            io.sockets.emit("connectStatus", 'closed');
+            io.sockets.emit('connectStatus', 'Connect');
+            writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
+        }
+    });
+
     appSocket.on('jog', function (data) {
         writeLog(chalk.red('Jog ' + data), 1);
         if (isConnected) {
@@ -3413,9 +3372,9 @@ function writeLog(line, verb) {
         if (!logFile) {
             if (isElectron() && os.platform == 'darwin') {
                 //io.sockets.emit('data', 'Running on Darwin (macOS)');
-                logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'), {flags:'a'});
+                logFile = fs.createWriteStream(path.join(electronApp.getPath('userData'),'logfile.txt'));
             } else {
-                logFile = fs.createWriteStream('./logfile.txt', {flags:'a'});
+                logFile = fs.createWriteStream('./logfile.txt');
             }
             logFile.on('error', function(e) { console.error(e); });
         }
@@ -3448,7 +3407,6 @@ function doJobAction(action) {
         }
 
     }
-
 
 }
 
