@@ -8,6 +8,8 @@ config.webPort = process.env.WEB_PORT || 8000;
 config.IP = process.env.IP || '0.0.0.0';
 config.serverVersion = '4.0.138';
 config.apiVersion = '4.0.7';
+//config.interface = 'Wi-Fi' //Windows Name
+//config.interface = 'wlan0' //linux name
 
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
 config.logLevel = process.env.LOG_LEVEL || 0;
