@@ -5,7 +5,6 @@
 node_modules
 release
 dist
-app
 
 # Compiled source #
 ###################
