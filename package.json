@@ -1,12 +1,11 @@
 {
   "name": "lw.comm-server",
-  "version": "4.0.138",
+  "version": "4.1.0",
   "license": "AGPL-3.0",
   "description": "Unified communications server for LaserWeb/CNCweb",
   "author": "github.com/LaserWeb",
   "contributors": [
-    "Claudio Prezzi <claudio.prezzi@gmail.com>",
-    "Peter van der Walt <peter.plaaswerf@gmail.com>"
+    "Claudio Prezzi <claudio.prezzi@gmail.com>"
   ],
   "repository": {
     "type": "git",
@@ -14,9 +13,6 @@
   },
   "devDependencies": {
     "copyfiles": "^1.2.0",
-    "electron": "^1.8.8",
-    "electron-builder": "^14.5.3",
-    "electron-rebuild": "^1.10.1",
     "ncp": "^2.0.0"
   },
   "dependencies": {
@@ -25,7 +21,7 @@
     "hdiutil": "0.0.6",
     "node-static": "*",
     "request": "*",
-    "serialport": "^6.2.2",
+    "serialport": "^7.1.5",
     "socket.io": "1.7.4",
     "ws": "1.1.5"
   },
@@ -35,19 +31,9 @@
   "homepage": "https://laserweb.yurl.ch",
   "main": "server.js",
   "scripts": {
-    "start": "echo \"Please run 'npm run dist' to create a local installer, or run 'npm run nightlylinux' or 'npm run nightlywindows' to build distributable installers for each platform\" ",
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 0",
-    "update_lw4": "git rm app/ -r -f && cp ../LaserWeb4/dist/. app/ -r -u && git add app/",
-    "distmac": "npm run copy && build --mac ",
-    "distwinx86": "npm run copy && build --win --ia32 ",
-    "distwinx64": "npm run copy && build --win --x64",
-    "distlinx86": "export USE_SYSTEM_XORRISO=true&& npm run copy && build --linux --ia32 ",
-    "distlinx64": "export USE_SYSTEM_XORRISO=true&& npm run copy && build --linux --x64",
-    "copy": "ncp ../LaserWeb4/dist/ app/ --limit=6",
-    "nightlywindows64": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distwinx64 && mkdir -p ../LaserWeb4-Binaries/windows && cp -f ./dist/*.exe ../LaserWeb4-Binaries/windows/",
-    "nightlywindows32": "cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distwinx86 && mkdir -p ../LaserWeb4-Binaries/windows && cp -f ./dist/*.exe ../LaserWeb4-Binaries/windows/",
-    "nightlylinux64": "export USE_SYSTEM_XORRISO=true&&cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distlinx64 && mkdir -p ../LaserWeb4-Binaries/linux && cp -f ./dist/*.AppImage ../LaserWeb4-Binaries/linux/",
-    "nightlylinux32": "export USE_SYSTEM_XORRISO=true&&cd ../LaserWeb4 && git checkout dev-es6 && git pull && npm run installdev && npm run bundle-dev && cd .. && cd lw.comm-server && git checkout electron_bundler && git pull && npm install && npm run distlinx86 && mkdir -p ../LaserWeb4-Binaries/linux && cp -f ./dist/*.AppImage ../LaserWeb4-Binaries/linux/"
+    "update_frontend": "git rm app/ -r -f && cp ../LaserWeb4/dist/. app/ -r -u && git add app/"
   },
   "keywords": [
     "laserweb",
@@ -62,8 +48,8 @@
     "ESP8266"
   ],
   "engines": {
-    "node": ">=10.15.1",
-    "npm": ">=6.4.1"
+    "node": ">=12.22.7",
+    "npm": ">=6.14.15"
   },
   "build": {
     "appId": "xyz.laserweb",
@@ -95,6 +81,5 @@
         }
       ]
     }
-  },
-  "postinstall": "electron-builder install-app-deps"
+  }
 }
