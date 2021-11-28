@@ -8,6 +8,7 @@
     "Claudio Prezzi <claudio.prezzi@gmail.com>",
     "Peter van der Walt <peter.plaaswerf@gmail.com>"
   ],
+  "type": "commonjs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
@@ -20,12 +21,12 @@
     "ncp": "2.0.x"
   },
   "dependencies": {
-    "chalk": "*",
+    "chalk": "4.x",
     "dotenv": "8.x",
     "hdiutil": "0.0.6",
     "node-static": "*",
     "request": "*",
-    "serialport": "6.2.2",
+    "serialport": "*",
     "socket.io": "1.7.x",
     "ws": "^1.1.x"
   },
