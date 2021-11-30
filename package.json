@@ -7,6 +7,7 @@
   "contributors": [
     "Claudio Prezzi <claudio.prezzi@gmail.com>"
   ],
+  "type": "commonjs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
@@ -16,7 +17,7 @@
     "ncp": "^2.0.0"
   },
   "dependencies": {
-    "chalk": "*",
+    "chalk": "4.x",
     "dotenv": "8.x",
     "hdiutil": "0.0.6",
     "node-static": "*",
@@ -48,7 +49,7 @@
     "ESP8266"
   ],
   "engines": {
-    "node": ">=12.22.7",
+    "node": ">=12.22.5",
     "npm": ">=6.14.15"
   },
   "build": {
