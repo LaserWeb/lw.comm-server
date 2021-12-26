@@ -158,7 +158,7 @@ io.sockets.on('connection', function (appSocket) {
 
     // send supported interfaces
     appSocket.emit('interfaces', supportedInterfaces);
-    
+
     // check available ports
     serialport.list(function (err, ports) {
         portsList = ports;
@@ -193,7 +193,7 @@ io.sockets.on('connection', function (appSocket) {
     } else {
         appSocket.emit('connectStatus', 'Connect');
     }
-    
+
     appSocket.on('firstLoad', function () {
         writeLog(chalk.yellow('INFO: ') + chalk.blue('FirstLoad called'), 1);
         appSocket.emit('serverConfig', config);
@@ -930,7 +930,7 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connected to ' + connectedIp), 1);
                     isConnected = true;
                     connectedTo = connectedIp;
-                    
+
                     // Start interval for qCount messages to appSocket clients
 //                    queueCounter = setInterval(function () {
 //                        io.sockets.emit('qCount', gcodeQueue.length);
@@ -1329,7 +1329,7 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket = new WebSocket('ws://'+connectedIp+'/'); // connect to ESP websocket
                 io.sockets.emit('connectStatus', 'opening:' + connectedIp);
 
-                // ESP socket evnets -----------------------------------------------        
+                // ESP socket evnets ----------------------------------------------- 
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
@@ -1870,10 +1870,10 @@ io.sockets.on('connection', function (appSocket) {
                         io.sockets.emit('qCount', gcodeQueue.length - queuePointer);
                     }, 500);
                     io.sockets.emit('runStatus', 'running');
-					
+
 					//NAB - Added to support action to run befor job starts
                     doJobAction(config.jobOnStart);
-					
+
                     send1Q();
                 }
             }
@@ -1918,7 +1918,7 @@ io.sockets.on('connection', function (appSocket) {
             if (data.length > 2) {
                 feed = parseInt(data[2]);
                 if (feed) {
-                    feed = 'F' + feed;   
+                    feed = 'F' + feed;
                 }
             }
             if (dir && dist && feed) {
@@ -1965,7 +1965,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);    
+                writeLog(chalk.red('ERROR: ') + chalk.blue('Invalid params!'), 1);
             }
         } else {
             io.sockets.emit("connectStatus", 'closed');
@@ -2027,7 +2027,7 @@ io.sockets.on('connection', function (appSocket) {
                     break;
                 }
             } else {
-                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);    
+                writeLog(chalk.red('error') + chalk.blue('Invalid params!'), 1);
                 io.sockets.emit('data', 'Invalid jogTo() params!');
             }
         } else {
@@ -2323,7 +2323,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+ 
     appSocket.on('feedOverride', function (data) {
         if (isConnected) {
             switch (firmware) {
@@ -2768,10 +2768,10 @@ io.sockets.on('connection', function (appSocket) {
             blocked = false;
             paused = false;
             io.sockets.emit('runStatus', 'stopped');
-			
+
 			//NAB - Added to support action to run after job aborts
             doJobAction(config.jobOnAbort);
-			
+
         } else {
             io.sockets.emit("connectStatus", 'closed');
             io.sockets.emit('connectStatus', 'Connect');
@@ -2983,7 +2983,7 @@ io.sockets.on('connection', function (appSocket) {
             }
         }
     });
-    
+
     appSocket.on('clearAlarm', function (data) { // Clear Alarm
         if (isConnected) {
             data = parseInt(data);
@@ -3070,7 +3070,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('resetMachine', function () {
         if (isConnected) {
             writeLog(chalk.red('Reset Machine'), 1);
@@ -3101,7 +3101,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('closePort', function (data) { // Close machine port and dump queue
         if (isConnected) {
             switch (connectionType) {
@@ -3151,12 +3151,12 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
-    
+
     appSocket.on('disconnect', function () { // App disconnected
         let id = connections.indexOf(appSocket);
         writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
         connections.splice(id, 1);
-    });    
+    });
 
 }); // End appSocket
 
@@ -3250,7 +3250,7 @@ function send1Q() {
                     gcodeLen = gcodeQueue[queuePointer].length;
                     if (gcodeLen < spaceLeft) {
                         // Add gcode to send buffer
-                        gcodeLine += gcodeQueue[queuePointer]; 
+                        gcodeLine += gcodeQueue[queuePointer];
                         queuePointer++;
                         spaceLeft -= gcodeLen;
                     } else {
@@ -3333,9 +3333,9 @@ function send1Q() {
             startTime = null;
             runningJob = null;
             io.sockets.emit('runStatus', 'finished');
-			
+
 			//NAB - Added to support action to run after job completes
-            doJobAction(config.jobOnFinish);			
+            doJobAction(config.jobOnFinish);
         }
     } else {
         io.sockets.emit("connectStatus", 'closed');
@@ -3402,6 +3402,6 @@ function doJobAction(action) {
 
 }
 
-if (require.main === module) { 
-    exports.LWCommServer(config); 
+if (require.main === module) {
+    exports.LWCommServer(config);
 }
