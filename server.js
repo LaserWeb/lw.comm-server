@@ -160,14 +160,14 @@ io.sockets.on('connection', function (appSocket) {
     appSocket.emit('interfaces', supportedInterfaces);
 
     // check available ports
-    serialport.list(function (err, ports) {
+    serialport.list().then(ports => {
         portsList = ports;
         appSocket.emit('ports', portsList);
     });
     // reckeck ports every 2s
     if (!listPortsLoop) {
         listPortsLoop = setInterval(function () {
-            serialport.list(function (err, ports) {
+            serialport.list().then(ports => {
                 if (JSON.stringify(ports) != JSON.stringify(portsList)) {
                     portsList = ports;
                     io.sockets.emit('ports', ports);
@@ -198,7 +198,7 @@ io.sockets.on('connection', function (appSocket) {
         writeLog(chalk.yellow('INFO: ') + chalk.blue('FirstLoad called'), 1);
         appSocket.emit('serverConfig', config);
         appSocket.emit('interfaces', supportedInterfaces);
-        serialport.list(function (err, ports) {
+        serialport.list().then(ports => {
             appSocket.emit('ports', ports);
         });
         if (isConnected) {
@@ -238,7 +238,7 @@ io.sockets.on('connection', function (appSocket) {
 
     appSocket.on('getPorts', function () { // Refresh serial port list
         writeLog(chalk.yellow('INFO: ') + chalk.blue('Requesting Ports list '), 1);
-        serialport.list(function (err, ports) {
+        serialport.list().then(ports => {
             appSocket.emit('ports', ports);
         });
     });
