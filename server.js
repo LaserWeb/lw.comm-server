@@ -34,7 +34,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const net = require('net');
 const os = require('os');
-const dns = require('dns');
+const ip = require("ip");
 const fs = require('fs');
 const path = require('path');
 const nstatic = require('node-static');
@@ -72,6 +72,7 @@ var queueLen;
 var queuePos = 0;
 var queuePointer = 0;
 var readyToSend = true;
+var jobRequestIP;
 
 var optimizeGcode = false;
 
@@ -97,26 +98,26 @@ var xPos = 0.00, yPos = 0.00, zPos = 0.00, aPos = 0.00;
 var xOffset = 0.00, yOffset = 0.00, zOffset = 0.00, aOffset = 0.00;
 var has4thAxis = false;
 
-dns.lookup(os.hostname(), function (err, add, fam) {
-    writeLog(chalk.green(' '), 0);
-    writeLog(chalk.green('***************************************************************'), 0);
-    writeLog(chalk.white('        ---- LaserWeb Comm Server ' + config.serverVersion + ' ----        '), 0);
-    writeLog(chalk.green('***************************************************************'), 0);
-    writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
-    writeLog(chalk.green('***************************************************************'));
-    writeLog(chalk.green(' '), 0);
-    writeLog(chalk.red('* Updates: '), 0);
-    writeLog(chalk.green('  Remember to check the commit log on'), 0);
-    writeLog(chalk.yellow('  https://github.com/LaserWeb/lw.comm-server/commits/master'), 0);
-    writeLog(chalk.green('  regularly, to know about updates and fixes, and then when ready'), 0);
-    writeLog(chalk.green('  update accordingly by running ') + chalk.cyan('git pull'), 0);
-    writeLog(chalk.green(' '), 0);
-    writeLog(chalk.red('* Support: '), 0);
-    writeLog(chalk.green('  If you need help / support, come over to '), 0);
-    writeLog(chalk.green('  ') + chalk.yellow('https://forum.makerforums.info/c/laserweb-cncweb/78'), 0);
-    writeLog(chalk.green('***************************************************************'), 0);
-    writeLog(chalk.green(' '), 0);
-});
+var add = ip.address();
+
+writeLog(chalk.green(' '), 0);
+writeLog(chalk.green('***************************************************************'), 0);
+writeLog(chalk.white('        ---- LaserWeb Comm Server ' + config.serverVersion + ' ----        '), 0);
+writeLog(chalk.green('***************************************************************'), 0);
+writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
+writeLog(chalk.green('***************************************************************'));
+writeLog(chalk.green(' '), 0);
+writeLog(chalk.red('* Updates: '), 0);
+writeLog(chalk.green('  Remember to check the commit log on'), 0);
+writeLog(chalk.yellow('  https://github.com/LaserWeb/lw.comm-server/commits/master'), 0);
+writeLog(chalk.green('  regularly, to know about updates and fixes, and then when ready'), 0);
+writeLog(chalk.green('  update accordingly by running ') + chalk.cyan('git pull'), 0);
+writeLog(chalk.green(' '), 0);
+writeLog(chalk.red('* Support: '), 0);
+writeLog(chalk.green('  If you need help / support, come over to '), 0);
+writeLog(chalk.green('  ') + chalk.yellow('https://forum.makerforums.info/c/laserweb-cncweb/78'), 0);
+writeLog(chalk.green('***************************************************************'), 0);
+writeLog(chalk.green(' '), 0);
 
 
 // Init webserver
@@ -145,6 +146,8 @@ var app = http.createServer(function (req, res) {
         });
     }
 });
+
+writeLog(chalk.yellow('Binding to IP: ' + config.IP + ' on port: ' + config.webPort), 1);
 app.listen(config.webPort, config.IP);
 var io = websockets(app);
 
@@ -157,11 +160,13 @@ io.sockets.on('connection', function (appSocket) {
     writeLog(chalk.yellow('App connected! (id=' + connections.indexOf(appSocket) + ')'), 1);
 
     // send supported interfaces
+    writeLog(chalk.yellow('Connect (' + connections.indexOf(appSocket) + ') ') + chalk.blue('Sending Interfaces list: ' + supportedInterfaces), 1);
     appSocket.emit('interfaces', supportedInterfaces);
 
     // check available ports
     serialport.list().then(ports => {
         portsList = ports;
+        writeLog(chalk.yellow('Connect(' + connections.indexOf(appSocket) + ') ') + chalk.blue('Sending Ports list: ' + JSON.stringify(ports)), 1);
         appSocket.emit('ports', portsList);
     });
     // reckeck ports every 2s
@@ -188,7 +193,14 @@ io.sockets.on('connection', function (appSocket) {
             appSocket.emit('activeIP', connectedTo);
         }
         if (runningJob) {
-            appSocket.emit('runningJob', runningJob);
+            let currentTime = new Date(Date.now());
+            let elapsedTimeMS = currentTime.getTime() - startTime.getTime();
+            let elapsedTime = Math.round(elapsedTimeMS / 1000);
+            let speed = (queuePointer / elapsedTime);
+            if (speed >= 100) speed = speed.toFixed(0);
+            else speed = speed.toPrecision(3);
+            let pct = ((queuePointer / queueLen) * 100).toFixed(1);
+            appSocket.emit('runningJobStatus', 'Running job started @ ' + startTime.toLocaleTimeString() + ' on ' + startTime.toLocaleDateString() + ' from ' + jobRequestIP + '<br/>Queue: ' + queuePointer + ' done of ' + queueLen + ' (' + pct + '%, ave. ' + speed + ' lines/s)');
         }
     } else {
         appSocket.emit('connectStatus', 'Connect');
@@ -284,9 +296,12 @@ io.sockets.on('connection', function (appSocket) {
 
     appSocket.on('connectTo', function (data) { // If a user picks a port to connect to, open a Node SerialPort Instance to it
         data = data.split(',');
+        let reset = false;
         writeLog(chalk.yellow('INFO: ') + chalk.blue('Connecting to ' + data), 1);
         if (!isConnected) {
             connectionType = data[0].toLowerCase();
+            if (data.length >= 4) reset = data[3];
+            else if (config.resetOnConnect == 1) reset = true;
             firmware = false;
             switch (connectionType) {
             case 'usb':
@@ -301,11 +316,12 @@ io.sockets.on('connection', function (appSocket) {
                 port.on('open', function () {
                     io.sockets.emit('activePort', {port: port.path, baudrate: port.settings.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
-                    if (config.resetOnConnect == 1) {
-                        port.write(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                    if (reset == "true") {
+                        port.write(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
                         machineSend('\n'); // this causes smoothie to send the welcome string
+                        writeLog('Sent: \\n', 1);
                     }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
@@ -885,11 +901,12 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('connect', function (prompt) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    if (config.resetOnConnect == 1) {
-                        machineSend(String.fromCharCode(0x18)); // ctrl-x (needed for rx/tx connection)
+                    if (reset == "true") {
+                        machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
                         machineSend('\n'); // this causes smoothie to send the welcome string
+                        writeLog('Sent: \\n', 1);
                     }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
@@ -1329,15 +1346,16 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket = new WebSocket('ws://'+connectedIp+'/'); // connect to ESP websocket
                 io.sockets.emit('connectStatus', 'opening:' + connectedIp);
 
-                // ESP socket evnets ----------------------------------------------- 
+                // ESP socket events -----------------------------------------------
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    if (config.resetOnConnect == 1) {
+                    if (reset == "true") {
                         machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
                         machineSend('\n'); // this causes smoothie to send the welcome string
+                        writeLog('Sent: \\n', 1);
                     }
                     setTimeout(function () { //wait for controller to be ready
                         if (!firmware) { // Grbl should be already detected
@@ -1823,6 +1841,7 @@ io.sockets.on('connection', function (appSocket) {
         if (isConnected) {
             if (data) {
                 runningJob = data;
+                jobRequestIP = appSocket.request.connection.remoteAddress;
                 data = data.split('\n');
                 for (var i = 0; i < data.length; i++) {
                     var line = data[i].split(';'); // Remove everything after ; = comment
@@ -2323,7 +2342,7 @@ io.sockets.on('connection', function (appSocket) {
             writeLog(chalk.red('ERROR: ') + chalk.blue('Machine connection not open!'), 1);
         }
     });
- 
+
     appSocket.on('feedOverride', function (data) {
         if (isConnected) {
             switch (firmware) {
@@ -2765,6 +2784,7 @@ io.sockets.on('connection', function (appSocket) {
             laserTestOn = false;
             startTime = null;
             runningJob = null;
+            jobRequestIP = null;
             blocked = false;
             paused = false;
             io.sockets.emit('runStatus', 'stopped');
@@ -3307,8 +3327,11 @@ function send1Q() {
             finishTime = new Date(Date.now());
             elapsedTimeMS = finishTime.getTime() - startTime.getTime();
             elapsedTime = Math.round(elapsedTimeMS / 1000);
-            speed = (queuePointer / elapsedTime).toFixed(0);
-            writeLog('Done: ' + queuePointer + ' of ' + queueLen + ' (ave. ' + speed + ' lines/s)', 1);
+            speed = (queuePointer / elapsedTime);
+            if (speed >= 100) speed = speed.toFixed(0);
+            else speed = speed.toPrecision(3);
+            let pct = ((queuePointer / queueLen) * 100).toFixed(1);
+            writeLog('Done: ' + queuePointer + ' of ' + queueLen + ' (' + pct + '%, ave. ' + speed + ' lines/s)', 1);
         }
         if (queuePointer >= gcodeQueue.length) {
             clearInterval(queueCounter);
@@ -3317,7 +3340,9 @@ function send1Q() {
                 finishTime = new Date(Date.now());
                 elapsedTimeMS = finishTime.getTime() - startTime.getTime();
                 elapsedTime = Math.round(elapsedTimeMS / 1000);
-                speed = (queuePointer / elapsedTime).toFixed(0);
+                speed = (queuePointer / elapsedTime);
+                if (speed >= 100) speed = speed.toFixed(0);
+                else speed = speed.toPrecision(3);
                 writeLog("Job started at " + startTime.toString(), 1);
                 writeLog("Job finished at " + finishTime.toString(), 1);
                 writeLog("Elapsed time: " + elapsedTime + " seconds.", 1);
@@ -3332,6 +3357,7 @@ function send1Q() {
             queuePos = 0;
             startTime = null;
             runningJob = null;
+            jobRequestIP = null;
             io.sockets.emit('runStatus', 'finished');
 
 			//NAB - Added to support action to run after job completes
