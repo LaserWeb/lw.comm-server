@@ -146,7 +146,7 @@ var app = http.createServer(function (req, res) {
     }
 });
 app.listen(config.webPort, config.IP);
-var io = websockets.listen(app);
+var io = websockets(app);
 
 
 // WebSocket connection from frontend

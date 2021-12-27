@@ -22,7 +22,7 @@
     "node-static": "*",
     "request": "*",
     "serialport": "9.x",
-    "socket.io": "1.7.4",
+    "socket.io": "4.x",
     "ws": "1.1.5"
   },
   "bugs": {
