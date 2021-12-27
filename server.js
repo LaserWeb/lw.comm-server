@@ -104,7 +104,7 @@ writeLog(chalk.green(' '), 0);
 writeLog(chalk.green('***************************************************************'), 0);
 writeLog(chalk.white('        ---- LaserWeb Comm Server ' + config.serverVersion + ' ----        '), 0);
 writeLog(chalk.green('***************************************************************'), 0);
-writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort) + chalk.white(' to connect this server.'), 0);
+writeLog(chalk.white('  Use ') + chalk.yellow(' http://' + add + ':' + config.webPort) + chalk.white(' to connect to this server.'), 0);
 writeLog(chalk.green('***************************************************************'));
 writeLog(chalk.green(' '), 0);
 writeLog(chalk.red('* Updates: '), 0);
@@ -147,7 +147,11 @@ var app = http.createServer(function (req, res) {
     }
 });
 
-writeLog(chalk.yellow('Binding to IP: ' + config.IP + ' on port: ' + config.webPort), 1);
+if (config.IP == "0.0.0.0") {
+    writeLog(chalk.yellow('Server binding to all local IP addresses on port: ' + config.webPort), 1);
+} else {
+    writeLog(chalk.yellow('Server binding to IP: ' + config.IP + ' on port: ' + config.webPort), 1);
+}
 app.listen(config.webPort, config.IP);
 var io = websockets(app);
 
