@@ -170,7 +170,11 @@ io.sockets.on('connection', function (appSocket) {
     // check available ports
     serialport.list().then(ports => {
         portsList = ports;
-        writeLog(chalk.yellow('Connect(' + connections.indexOf(appSocket) + ') ') + chalk.blue('Sending Ports list: ' + JSON.stringify(ports)), 1);
+        let portPaths= new Array();
+        for (var i = 0; i < ports.length; i++) {
+              portPaths.push(ports[i].path);
+        }
+        writeLog(chalk.yellow('Connect(' + connections.indexOf(appSocket) + ') ') + chalk.blue('Sending Ports list: ' + portPaths), 1);
         appSocket.emit('ports', portsList);
     });
     // reckeck ports every 2s
@@ -179,8 +183,12 @@ io.sockets.on('connection', function (appSocket) {
             serialport.list().then(ports => {
                 if (JSON.stringify(ports) != JSON.stringify(portsList)) {
                     portsList = ports;
-                    io.sockets.emit('ports', ports);
-                    writeLog(chalk.yellow('Ports changed: ' + JSON.stringify(ports)), 1);
+                    io.sockets.emit('ports', portsList);
+                    let portPaths= new Array();
+                    for (var i = 0; i < ports.length; i++) {
+                          portPaths.push(ports[i].path);
+                    }
+                    writeLog(chalk.yellow('Ports changed: ' + portPaths), 1);
                 }
             });
         }, 2000);
