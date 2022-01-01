@@ -13,6 +13,11 @@ config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
 config.logLevel = process.env.LOG_LEVEL || 0;
 config.resetOnConnect = process.env.RESET_ON_CONNECT || 1;
 
+config.socketMaxDataSize = process.env.SOCKET_MAX_DATA_SIZE || 100000000;
+config.socketCorsOrigin = process.env.SOCKET_CORS_ORIGIN || '*';
+config.socketPingTimeout = process.env.SOCKET_PING_TIMEOUT || 20000;
+config.socketPingInterval = process.env.SOCKET_PING_INTERVAL || 25000;
+
 config.posDecimals = process.env.DRO_DECIMALS || 2;
 config.firmwareWaitTime = process.env.FIRMWARE_WAIT_TIME || 10;
 config.grblWaitTime = process.env.GRBL_WAIT_TIME || 1;

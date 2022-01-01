@@ -153,7 +153,15 @@ if (config.IP == "0.0.0.0") {
     writeLog(chalk.yellow('Server binding to IP: ' + config.IP + ' on port: ' + config.webPort), 1);
 }
 app.listen(config.webPort, config.IP);
-var io = websockets(app);
+var io = websockets(app, {
+    maxHttpBufferSize: config.socketMaxDataSize,
+    cors: {
+        origin: config.socketCorsOrigin,
+        methods: ["GET", "POST"]
+    },
+    pingTimeout:  config.socketPingTimeout,
+    pingInterval: config.socketPingInterval
+});
 
 
 // WebSocket connection from frontend
@@ -161,7 +169,7 @@ io.sockets.on('connection', function (appSocket) {
 
     // save new connection
     connections.push(appSocket);
-    writeLog(chalk.yellow('App connected! (id=' + connections.indexOf(appSocket) + ')'), 1);
+    writeLog(chalk.yellow('App connected! (id=' + connections.indexOf(appSocket) + ', ip=' + appSocket.handshake.address + ')'), 1);
 
     // send supported interfaces
     writeLog(chalk.yellow('Connect (' + connections.indexOf(appSocket) + ') ') + chalk.blue('Sending Interfaces list: ' + supportedInterfaces), 1);
@@ -3184,9 +3192,11 @@ io.sockets.on('connection', function (appSocket) {
         }
     });
 
-    appSocket.on('disconnect', function () { // App disconnected
+    appSocket.on('disconnect', function (data) { // App disconnected
+        data = data.replace('namespace ','')  // make disconnect reasons easier to comprehend
+        data = data.replace('transport','connection')
         let id = connections.indexOf(appSocket);
-        writeLog(chalk.yellow('App disconnected! (id=' + id + ')'), 1);
+        writeLog(chalk.yellow('App disconnected! (id=' + id + ', reason: ' + data + ')'), 1);
         connections.splice(id, 1);
     });
 
