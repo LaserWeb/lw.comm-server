@@ -18,12 +18,11 @@
   },
   "dependencies": {
     "chalk": "4.x",
-    "dotenv": "8.x",
-    "hdiutil": "0.0.6",
+    "dotenv": "10.x",
     "node-static": "*",
     "request": "*",
-    "serialport": "^7.1.5",
-    "socket.io": "1.7.4",
+    "serialport": "9.x",
+    "socket.io": "4.x",
     "ws": "1.1.5"
   },
   "bugs": {
