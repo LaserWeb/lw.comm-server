@@ -317,11 +317,20 @@ io.sockets.on('connection', function (appSocket) {
     appSocket.on('connectTo', function (data) { // If a user picks a port to connect to, open a Node SerialPort Instance to it
         data = data.split(',');
         let reset = false;
+        if (config.resetOnConnect == 1) reset = true;
         writeLog(chalk.yellow('INFO: ') + chalk.blue('Connecting to ' + data), 1);
         if (!isConnected) {
             connectionType = data[0].toLowerCase();
-            if (data.length >= 4) reset = data[3];
-            else if (config.resetOnConnect == 1) reset = true;
+            if (data.length >= 4) {  // if client supplies true/false, use that
+                switch(data[3]) {
+                case 'true':
+                    reset = true;
+                    break;
+                case 'false':
+                    reset = false;
+                    break;
+                }
+            }
             firmware = false;
             switch (connectionType) {
             case 'usb':
@@ -336,7 +345,7 @@ io.sockets.on('connection', function (appSocket) {
                 port.on('open', function () {
                     io.sockets.emit('activePort', {port: port.path, baudrate: port.settings.baudRate});
                     io.sockets.emit('connectStatus', 'opened:' + port.path);
-                    if (reset == "true") {
+                    if (reset) {
                         port.write(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
@@ -921,7 +930,7 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('connect', function (prompt) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    if (reset == "true") {
+                    if (reset) {
                         machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
@@ -1370,7 +1379,7 @@ io.sockets.on('connection', function (appSocket) {
                 machineSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
-                    if (reset == "true") {
+                    if (reset) {
                         machineSend(String.fromCharCode(0x18)); // ctrl-x (reset firmware)
                         writeLog('Sent: ctrl-x', 1);
                     } else {
