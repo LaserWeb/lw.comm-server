@@ -337,8 +337,8 @@ io.sockets.on('connection', function (appSocket) {
                 port = new SerialPort(data[1], {
                     baudRate: parseInt(data[2].replace('baud',''))
                 });
-		parser = new Readline({ delimiter: '\n' });
-		port.pipe(parser);
+                const parser = port.pipe(new Readline({ delimiter: '\n' }))
+                // parser.on('data', console.log)  // uncomment to dump raw data from the connected port
                 io.sockets.emit('connectStatus', 'opening:' + port.path);
 
                 // Serial port events -----------------------------------------------
