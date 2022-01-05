@@ -55,7 +55,7 @@ var logFile;
 var connectionType, connections = [];
 var gcodeQueue = [];
 var port, parser, isConnected, connectedTo, portsList;
-var machineSocket, connectedIp;
+var telnetSocket, espSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
 var statusLoop, queueCounter, listPortsLoop = false;
@@ -929,11 +929,11 @@ io.sockets.on('connection', function (appSocket) {
 
             case 'telnet':  // Only supported by smoothieware!
                 connectedIp = data[1];
-                machineSocket = net.connect(23, connectedIp);
+                telnetSocket = net.connect(23, connectedIp);
                 io.sockets.emit('connectStatus', 'opening:' + connectedIp);
 
                 // Telnet connection events -----------------------------------------------
-                machineSocket.on('connect', function (prompt) {
+                telnetSocket.on('connect', function (prompt) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
                     if (reset) {
@@ -974,7 +974,7 @@ io.sockets.on('connection', function (appSocket) {
                                 tinygBufferSize = TINYG_RX_BUFFER_SIZE; // reset tinygBufferSize
                                 clearInterval(queueCounter);
                                 clearInterval(statusLoop);
-                                machineSocket.destroy();
+                                telnetSocket.destroy();
                             }
                         }, config.firmwareWaitTime * 1000);
                     }
@@ -989,12 +989,12 @@ io.sockets.on('connection', function (appSocket) {
 //                    }, 500);
                 });
 
-                machineSocket.on('timeout', function () {
+                telnetSocket.on('timeout', function () {
                     writeLog(chalk.yellow('WARN: ') + chalk.blue('Telnet timeout!'), 1);
-                    machineSocket.end();
+                    telnetSocket.end();
                 });
 
-                machineSocket.on('close', function (e) {
+                telnetSocket.on('close', function (e) {
                     clearInterval(queueCounter);
                     clearInterval(statusLoop);
                     io.sockets.emit("connectStatus", 'closed:');
@@ -1007,12 +1007,12 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('Telnet connection closed'), 1);
                 });
 
-                machineSocket.on('error', function (e) {
+                telnetSocket.on('error', function (e) {
                     io.sockets.emit("error", e.message);
                     writeLog(chalk.red('ERROR: ') + 'Telnet error: ' + e.message, 1);
                 });
 
-                machineSocket.on('data', function (response) {
+                telnetSocket.on('data', function (response) {
                     //var bytes = new Uint8Array(data);
                     for (var i = 0; i < response.length; i++) {
                         if (response[i] != 0x0d) {
@@ -1378,11 +1378,14 @@ io.sockets.on('connection', function (appSocket) {
 
             case 'esp8266':
                 connectedIp = data[1];
-                machineSocket = new WebSocket('ws://'+connectedIp+'/'); // connect to ESP websocket
+                espSocket = new WebSocket('ws://'+connectedIp+'/', {
+                    protocolVersion: 13,
+                }); // connect to ESP websocket
+
                 io.sockets.emit('connectStatus', 'opening:' + connectedIp);
 
                 // ESP socket events -----------------------------------------------
-                machineSocket.on('open', function (e) {
+                espSocket.on('open', function (e) {
                     io.sockets.emit('activeIP', connectedIp);
                     io.sockets.emit('connectStatus', 'opened:' + connectedIp);
                     if (reset) {
@@ -1425,7 +1428,7 @@ io.sockets.on('connection', function (appSocket) {
                                 reprapWaitForPos = false;
                                 clearInterval(queueCounter);
                                 clearInterval(statusLoop);
-                                machineSocket.close();
+                                espSocket.close();
                             }
                         }, config.firmwareWaitTime * 1000);
                     }
@@ -1436,7 +1439,7 @@ io.sockets.on('connection', function (appSocket) {
                     //machineSend(String.fromCharCode(0x18));
                 });
 
-                machineSocket.on('close', function (e) {
+                espSocket.on('close', function (e) {
                     clearInterval(queueCounter);
                     clearInterval(statusLoop);
                     io.sockets.emit("connectStatus", 'closed:');
@@ -1449,14 +1452,14 @@ io.sockets.on('connection', function (appSocket) {
                     writeLog(chalk.yellow('INFO: ') + chalk.blue('ESP connection closed'), 1);
                 });
 
-                machineSocket.on('error', function (e) {
+                espSocket.on('error', function (e) {
                     io.sockets.emit('error', e.message);
                     io.sockets.emit('connectStatus', 'closed:');
                     io.sockets.emit('connectStatus', 'Connect');
                     writeLog(chalk.red('ESP ERROR: ') + chalk.blue(e.message), 1);
                 });
 
-                machineSocket.on('message', function (msg) {
+                espSocket.on('message', function (msg) {
                     espBuffer += msg;
                     var split = espBuffer.split(/\n/);
                     espBuffer = split.pop();
@@ -3189,7 +3192,7 @@ io.sockets.on('connection', function (appSocket) {
                 reprapWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
-                machineSocket.destroy();
+                telnetSocket.destroy();
                 break;
             case 'esp8266':
                 writeLog(chalk.yellow('WARN: ') + chalk.blue('Closing ESP @ ' + connectedIp), 1);
@@ -3202,7 +3205,7 @@ io.sockets.on('connection', function (appSocket) {
                 reprapWaitForPos = false;
                 clearInterval(queueCounter);
                 clearInterval(statusLoop);
-                machineSocket.close();
+                espSocket.close();
                 break;
             }
         } else {
@@ -3249,10 +3252,10 @@ function machineSend(gcode) {
         port.write(gcode);
         break;
     case 'telnet':
-        machineSocket.write(gcode);
+        telnetSocket.write(gcode);
         break;
     case 'esp8266':
-        machineSocket.send(gcode);
+        espSocket.send(gcode,{binary: false});
         break;
     }
 }
