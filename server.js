@@ -743,7 +743,13 @@ io.sockets.on('connection', function (appSocket) {
                             }
                         }, 250);
                     } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
-                        var jsObject = JSON.parse(data);
+                        try {
+                            var jsObject = JSON.parse(data);
+                        } catch(err) {
+                            console.error('Recieved invalid JSON response on connection:')
+                            console.error(data)
+                            var jsObject = "{}"
+                        }
                         if (jsObject.hasOwnProperty('r')) {
                             var footer = jsObject.f || (jsObject.r && jsObject.r.f);
                             var responseText;
@@ -1713,7 +1719,13 @@ io.sockets.on('connection', function (appSocket) {
                                     }
                                 }, 250);
                             } else if (data.indexOf('{') === 0) { // JSON response (probably TinyG)
-                                var jsObject = JSON.parse(data);
+                                try {
+                                    var jsObject = JSON.parse(data);
+                                } catch(err) {
+                                    console.error('Recieved invalid JSON response on connection:')
+                                    console.error(data)
+                                    var jsObject = "{}"
+                                }
                                 if (jsObject.hasOwnProperty('r')) {
                                     var footer = jsObject.f || (jsObject.r && jsObject.r.f);
                                     if (footer !== undefined) {
@@ -1764,7 +1776,6 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                                 if (jsObject.hasOwnProperty('sr')) {
                                     writeLog('statusChanged ' + jsObject.sr, 3);
-                                    var jsObject = JSON.parse(data);
                                     if (jsObject.sr.posx) {
                                         xPos = parseFloat(jsObject.sr.posx).toFixed(4);
                                     }
