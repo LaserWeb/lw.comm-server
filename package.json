@@ -12,10 +12,6 @@
     "type": "git",
     "url": "git+https://github.com/LaserWeb/lw.comm-server.git"
   },
-  "devDependencies": {
-    "copyfiles": "^1.2.0",
-    "ncp": "^2.0.0"
-  },
   "dependencies": {
     "chalk": "4.x",
     "dotenv": "10.x",
@@ -23,7 +19,7 @@
     "request": "*",
     "serialport": "9.x",
     "socket.io": "4.x",
-    "ws": "1.1.5"
+    "ws": "8.x"
   },
   "bugs": {
     "url": "https://github.com/LaserWeb/lw.comm-server/issues"
