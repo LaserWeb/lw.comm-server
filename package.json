@@ -15,6 +15,7 @@
   "dependencies": {
     "chalk": "4.x",
     "dotenv": "10.x",
+    "ip": "^1.1.5",
     "node-static": "*",
     "request": "*",
     "serialport": "9.x",
