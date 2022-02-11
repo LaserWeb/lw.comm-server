@@ -12,6 +12,7 @@ config.apiVersion = '4.0.8';
 config.verboseLevel = process.env.VERBOSE_LEVEL || 1;
 config.logLevel = process.env.LOG_LEVEL || 0;
 config.resetOnConnect = process.env.RESET_ON_CONNECT || 1;
+config.mpgType = process.env.MPG_TYPE || 0;
 
 config.socketMaxDataSize = process.env.SOCKET_MAX_DATA_SIZE || 100000000;
 config.socketCorsOrigin = process.env.SOCKET_CORS_ORIGIN || '*';
