@@ -59,7 +59,7 @@ var telnetSocket, espSocket, connectedIp;
 var telnetBuffer, espBuffer;
 
 var statusLoop, queueCounter, listPortsLoop = false;
-var lastSent = '', paused = false, blocked = false;
+var lastSent = '', paused = false, blocked = false, alarmed = false;
 
 var firmware, fVersion, fDate;
 var feedOverride = 100;
@@ -167,30 +167,35 @@ var io = websockets(app, {
 // MPG communication
 const HID = require("node-hid");
 var vendorId = 4302;    // for MPG: XHC HB04-L (0x10CE)
-var productId = 60272;  // for MPG: XHC HB04-L (0xEB70)
+var productId1 = 60272;  // for MPG: XHC HB04-L (0xEB70)
+var productId2 = 60307;  // for MPG: XHC HB04B (0xEB93)
 var mpgType = config.mpgType;
 var mpgRead, mpgWrite;
 var macro = [];
+var latchedfunction = "";
+
 if (mpgType != 0){
     switch(mpgType){
     case 'HB03':
     case 'HB04':
+    case 'HB04B':
         var devices = HID.devices();
+        // console.log(devices); // get a list of all usb HID devices
         devices.forEach(function(device) {
-            if (device.vendorId == vendorId && device.productId == productId){
+            if (device.vendorId == vendorId && (device.productId == productId1 || device.productId == productId2)) {
                 if (!mpgRead) {
                     mpgRead = new HID.HID(device.path);
-                    console.log("HID read device: " + device.path);
+                    console.log("MPG HID read device: " + device.path);
                 } else {
                     mpgWrite = new HID.HID(device.path);
-                    console.log("HID write device: " + device.path);
-                    console.log(mpgWrite.getFeatureReport(6, 8));
+                    console.log("MPG HID write device: " + device.path);
+                    //console.log(mpgWrite.getFeatureReport(6, 8));
                 }
             }
         });
         if (mpgRead) {
             mpgRead.on("data", function (data) {
-                writeLog(chalk.yellow('MPG read data: ' + JSON.stringify(data)), 1);
+                //writeLog(chalk.yellow('MPG read data: ' + JSON.stringify(data)), 1);
                 if (data) {
                     parseMPGPacket(data);
                 }
@@ -201,7 +206,7 @@ if (mpgType != 0){
         }
         if (mpgWrite) {
             mpgWrite.on("data", function (data) {
-                writeLog(chalk.yellow('MPG write data: ' + JSON.stringify(data)), 1);
+                //writeLog(chalk.yellow('MPG write data: ' + JSON.stringify(data)), 1);
             });
             mpgWrite.on("error", function (data) {
                 writeLog(chalk.yellow('MPG write error: ' + JSON.stringify(data)), 1);
@@ -471,7 +476,7 @@ io.sockets.on('connection', function (appSocket) {
 
                 parser.on('data', function (data) {
                     //data = data.toString().trimStart();
-                    writeLog('Recv: ' + data, 3);
+                    writeLog('Parser Recv: ' + data, 3);
                     if (data.indexOf('ok') === 0) { // Got an OK so we are clear to send
                         if (firmware === 'grbl') {
                             grblBufferSize.shift();
@@ -553,7 +558,7 @@ io.sockets.on('connection', function (appSocket) {
                             var startWPos = data.search(/wpos:/i) + 5;
                             var wPos;
                             if (startWPos > 5) {
-                                wPos = data.replace('>', '').substr(startWPos).split(/,/, 4);
+                                wPos = data.replace('>', '').substr(startWPos).split(/,|\|/, 5); // modified as zPos had feed rate packed in
                             }
                             if (Array.isArray(wPos)) {
                                 var send = true;
@@ -934,6 +939,7 @@ io.sockets.on('connection', function (appSocket) {
                         }
                         //io.sockets.emit('data', data);
                     } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
+                        alarmed = true;
                         switch (firmware) {
                         case 'grbl':
                             grblBufferSize.shift();
@@ -1384,6 +1390,7 @@ io.sockets.on('connection', function (appSocket) {
                                 }
                             }, 250);
                         } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
+                            alarmed = true;
                             switch (firmware) {
                             case 'grbl':
                                 var alarmCode = parseInt(data.split(':')[1]);
@@ -1879,6 +1886,7 @@ io.sockets.on('connection', function (appSocket) {
                                     }, 250);
                                 }
                             } else if (data.indexOf('ALARM') === 0) { //} || data.indexOf('HALTED') === 0) {
+                                alarmed = true;
                                 switch (firmware) {
                                 case 'grbl':
                                     var alarmCode = parseInt(data.split(':')[1]);
@@ -3303,6 +3311,7 @@ function stopMachine() {
 function clearAlarm(data) { // Clear Alarm
     if (isConnected) {
         data = parseInt(data);
+        alarmed = false;
         writeLog('Clearing Queue: Method ' + data, 1);
         switch (data) {
         case 1:
@@ -3611,6 +3620,7 @@ function send1Q() {
 
 //==========================
 // MPG implementation start
+//  for XHC HB03 and HB04
 //==========================
 
 // MPG CMD Byte Packet Names
@@ -3629,6 +3639,7 @@ const MPG_DIAL_Z_AXIS = 0x13;
 const MPG_DIAL_A_AXIS = 0x18;
 const MPG_DIAL_SPINDLE = 0x14;
 const MPG_DIAL_FEED = 0x15;
+
 
 var CMDS = [
     {name: "sleep", value: [0x00, 0x00], gcode: "None"},
@@ -3653,6 +3664,61 @@ var CMDS = [
     {name: "reset", value: [0x17, 0x06], gcode: "None"},
 ];
 
+//==========================
+// MPG implementation start
+//  for XHC LHB04B WHB04B
+// Credit to Raoul Rubien
+// for machinekit work
+//==========================
+
+// received from MPG
+const HB04B_CMD_START_BYTE = 0;
+const HB04B_CMD_BYTE1 = 1;
+const HB04B_CMD_BUTTON1 = 2;
+const HB04B_CMD_BUTTON2 = 3;
+const HB04B_CMD_FEEDROTARY = 4;
+const HB04B_CMD_AXISROTARY =  5;
+const HB04B_CMD_VELOCITY = 6;
+const HB04B_CMD_CRC = 7;
+
+// MPG AXIS ROTARY Modes (CMD[5])
+const HB04B_DIAL_OFF = 0x06;
+const HB04B_DIAL_X_AXIS = 0x11;
+const HB04B_DIAL_Y_AXIS = 0x12;
+const HB04B_DIAL_Z_AXIS = 0x13;
+const HB04B_DIAL_A_AXIS = 0x14;
+const HB04B_DIAL_B_AXIS = 0x15;
+const HB04B_DIAL_C_AXIS = 0x16;
+
+// MPG FEED ROTARY (CMD[4])
+const HB04B_FEED_0001 = 0x0D;
+const HB04B_FEED_001 = 0x0E;
+const HB04B_FEED_01 = 0x0F;
+const HB04B_FEED_1 = 0x10;
+const HB04B_FEED_PCT60 = 0x1A;
+const HB04B_FEED_PCT100 = 0x1B;
+const HB04B_FEED_LEAD = 0x1C;
+
+var HB04B_CMDS = [
+    {name: "reset", value: [0x01], gcode: "None"},
+    {name: "stop", value: [0x02], gcode: "!\n%\n"},
+    {name: "start_pause", value: [0x03], gcode: "~ || !"},
+    // feed plus 0x04
+    // feed minus 0x05
+    // spindle plus 0x06
+    // spindle minus 0x07
+    {name: "machinehome", value: [0x08], gcode: "none"},
+    {name: "safez", value: [0x09], gcode: "g92"},
+    {name: "workpiecehome", value: [0x0A], gcode: "None"},
+    // spindle 0x0B
+    {name: "function", value: [0x0C], gcode: "None"},
+    {name: "probez", value: [0x0D], gcode: "g28.3z0"},
+    {name: "continuous", value: [0x0E], gcode: "None"},
+    {name: "step", value: [0x0F], gcode: "None"},
+	// macro_10 0x10
+];
+
+
 var count = 15;
 var isJogging = false;
 var jogMode = "incremental"; //vs "continuous"
@@ -3665,27 +3731,72 @@ var distanceTable = [10, 1, 0.1, 0.01];
 var stepMulTable = [0x0A, 0x08, 0x03, 0x01]
 
 function getDialSetting(dialByte) {
-    switch (dialByte) {
-        case(MPG_DIAL_OFF):
-            return ("DIAL_OFF");
-        case(MPG_DIAL_X_AXIS):
-            return ("X");
-        case(MPG_DIAL_Y_AXIS):
-            return ("Y");
-        case(MPG_DIAL_Z_AXIS):
-            return ("Z");
-        case(MPG_DIAL_A_AXIS):
-            return ("A");
-        case(MPG_DIAL_SPINDLE):
-            return ("SPINDLE");
-        case(MPG_DIAL_FEED):
-            return ("FEED");
-    }
+	switch (mpgType) {
+		case 'HB03':
+		case 'HB04':
+			switch (dialByte) {
+				case(MPG_DIAL_OFF):
+					return ("DIAL_OFF");
+				case(MPG_DIAL_X_AXIS):
+					return ("X");
+				case(MPG_DIAL_Y_AXIS):
+					return ("Y");
+				case(MPG_DIAL_Z_AXIS):
+					return ("Z");
+				case(MPG_DIAL_A_AXIS):
+					return ("A");
+				case(MPG_DIAL_SPINDLE):
+					return ("SPINDLE");
+				case(MPG_DIAL_FEED):
+					return ("FEED");
+			}
+			break;
+		case 'HB04B':
+			switch (dialByte) {
+				case(HB04B_DIAL_OFF):
+					return ("DIAL_OFF");
+				case(HB04B_DIAL_X_AXIS):
+					return ("X");
+				case(HB04B_DIAL_Y_AXIS):
+					return ("Y");
+				case(HB04B_DIAL_Z_AXIS):
+					return ("Z");
+				case(HB04B_DIAL_A_AXIS):
+					return ("A");
+			}
+			break;
+		
+	}
+	return null;
 }
 
 function getStepDistance(){
     return distanceTable[stepDistance];
 }
+
+function getStepDistanceHB04B(feedrotary){
+	switch(feedrotary) {
+		case HB04B_FEED_0001:
+		case HB04B_FEED_001:
+			stepDistance = 0.01;
+			break;
+		case HB04B_FEED_01:
+			stepDistance = 0.1;
+			break;
+		case HB04B_FEED_1:
+			stepDistance = 1;
+			break;
+		case HB04B_FEED_PCT60:
+		case HB04B_FEED_PCT100:
+			stepDistance = 10;
+			break;
+		case HB04B_FEED_LEAD:
+			stepDistance = 0;
+			break;
+	}
+	return stepDistance;
+}
+
 
 function setStepDistance() {
     stepDistance = stepDistance + 1;
@@ -3696,38 +3807,48 @@ function setStepDistance() {
 
 //Continuous is the machine will continue to jog as long as there are event dial events coming in.
 function doJogContinuous(dialSetting, cmd) {
+	
+	var sign = 1;
+	var feed = 8000; // hardcoded, should be ok for continuous stepping.
+	var stepscale = 1;
     //build our jog command
     var velocity = cmd.value[1];
     //We need to figure out if this is a negative move or a positive move
-    if (velocity > 0xaa) {
-        sign = "-";
-        velocity = 255 - velocity; // When rotating counter clockwise the velocity
+    if (velocity > 0xaa) {			// why not 0x80?
+        sign = -1;
+        velocity = 256 - velocity; // When rotating counter clockwise the velocity
         //Comes in as 0xfe for 1 which we will subtract from 0xff to get a sane number
-    } else {
-        sign = ""
     }
-    tmpCalc = (velocity * 10) * velocityMin;
-    if(tmpCalc > calculatedVelocity){
-        calculatedVelocity = tmpCalc; //If we are moving faster than previously we will increase our speed.
-    }
-    console.log("SANE VELOCITY: " + velocity);
-    cmd.gcode = "G91\nG1F" + calculatedVelocity + dialSetting + sign + count + "\n";
-    return (cmd);
+
+    if (mpgType == 'HB04B') {
+		stepscale = cmd.value[2];
+		if (stepscale > 1) { // cap maximum speed while continuous stepping
+			stepscale =1;
+		}
+		jog({dir: dialSetting, dist: sign * stepscale * velocity, feed: feed}); // value[2] is the feed rotary knob setting in float
+	} else {
+		jog({dir: dialSetting, dist: sign * getStepDistance() * velocity, feed: feed});
+	}
 }
 
 //Incremental Will only single step then stop and wait for another click of the jog dial.
 function doJogIncremental(dialSetting, cmd) {
     var sign = 1;
+    var feed = 3000; // hardcoded, should be ok for single stepping.
     //build our jog command
     //We need to figure out if this is a negative move or a positive move
-    if (cmd.value[1] > 0xaa) {
+    if (cmd.value[1] > 0xaa) {		// why not 0x80?
         sign = -1;
     }
-    var feed = 3000;
-    jog({dir: dialSetting, dist: sign * getStepDistance(), feed: feed});
+    
+    if (mpgType == 'HB04B') {
+		jog({dir: dialSetting, dist: sign * cmd.value[2], feed: feed}); // value[2] is the feed rotary knob setting in float
+	} else {
+		jog({dir: dialSetting, dist: sign * getStepDistance(), feed: feed});
+	}
 }
 
-function parseCommand(data) {
+function parseCommand(data, nbbuttons) {
     switch (mpgType) {
         case 'HB03':
         case 'HB04':
@@ -3740,7 +3861,7 @@ function parseCommand(data) {
                         if (data[MPG_CMD_VELOCITY] > 0xaa) {
                             dist = -1;
                         }
-                        var dialSetting = getDialSetting(data[MPG_CMD_DIAL_BYTE]);
+                        var dialSetting = getDialSetting(data[MPG_CMD_DIAL_BYTE]); // rotary selector
                         switch(dialSetting) {
                             case "DIAL_OFF":
                                 break;
@@ -3759,21 +3880,77 @@ function parseCommand(data) {
                 }
             }
             break;
+        case 'HB04B':
+			var buttonsel;
+			if (nbbuttons == 2) {
+				buttonsel = HB04B_CMD_BUTTON2;
+			} else {
+				buttonsel = HB04B_CMD_BUTTON1;
+			}
+        
+            for (var i = 0; i < HB04B_CMDS.length; i++) {
+                if (data[buttonsel] == HB04B_CMDS[i].value[0]) { // first button
+
+                    if (data[HB04B_CMD_VELOCITY] != 0x00) {
+                        //We got a velocity, Now this is a JOG command vs a Keyup command.
+                        var dist = 1;
+                        if (data[HB04B_CMD_VELOCITY] > 0x80) {
+                            dist = -1;
+                        }
+                        var dialSetting = getDialSetting(data[HB04B_CMD_AXISROTARY]); // axis selection
+                        var feedSetting = getStepDistanceHB04B(data[HB04B_CMD_FEEDROTARY]); // step / feed selection
+                        
+                        switch(dialSetting) {
+                            case "DIAL_OFF":
+                                break;
+                            /* // handled differently on HB04B
+                            case "SPINDLE":
+                                return ({name: "spindleOverride", value: dist});
+                                break;
+                            case "FEED":
+                                return ({name: "feedOverride", value: dist});
+                                break;
+                            */
+                            
+                            default:
+                                return ({name: "jog", value: [0x00, data[HB04B_CMD_VELOCITY], feedSetting], gcode: "G1F100"});
+                                break;
+                        }
+                    }
+                    return (HB04B_CMDS[i]);
+                }
+            }
+            break;
+        
     }
     return null;
 }
 
 function parseMPGPacket(data) {
-    switch (mpgType) {
+	switch (mpgType) {
     case 'HB03':
     case 'HB04':
+    case 'HB04B' :
         if (data[MPG_CMD_START_BYTE] == 0x04) { //0x04 is a constant for this device as the first byte
-            var dialSetting = getDialSetting(data[MPG_CMD_DIAL_BYTE]);
-            var tmpCmd = parseCommand(data);
-            //writeLog(tmpCmd, 3);
+            
+            var tmpCmd = parseCommand(data, 1); // check first button
+            var tmpCmd2 = "";
+            
+            if (mpgType == "HB04B") {
+				var dialSetting = getDialSetting(data[HB04B_CMD_AXISROTARY]); //left rotary selector for axis selection
+				tmpCmd2 = parseCommand(data, 2); // check second button
+				if (!tmpCmd2) {
+					latchedfunction = ""; // if no 2nd button pressed
+				}
+			} else {
+				//HB04 and HB04
+				var dialSetting = getDialSetting(data[MPG_CMD_DIAL_BYTE]);
+			}
+
+			
 
             if (tmpCmd) {
-                console.log("DIAL: " + dialSetting + " Command: " + tmpCmd.name, " Gcode: " + tmpCmd.gcode);
+					console.log("DIAL: " + dialSetting + " Command: " + tmpCmd.name, " Gcode: " + tmpCmd.gcode);
 
                 switch (tmpCmd.name) {
                     case("rewind"):
@@ -3824,7 +4001,7 @@ function parseMPGPacket(data) {
                         if (jogMode == "incremental") {
                             doJogIncremental(dialSetting, tmpCmd);
                         } else {
-                            tmpCmd = doJogContinuous(dialSetting, tmpCmd);
+                            doJogContinuous(dialSetting, tmpCmd);
                         }
                         break;
 
@@ -3885,7 +4062,7 @@ function parseMPGPacket(data) {
                         console.log("Changing Step Rate for Incremental Mode to " + stepSize);
                         break;
 
-                    case("model"):
+                    case("model"): //HB03 and HB04
                         console.log("-----Changing Jog Modes----");
                         if (jogMode == "incremental") {
                             jogMode = "continuous";
@@ -3895,13 +4072,25 @@ function parseMPGPacket(data) {
                         console.log("MODE: " + jogMode);
                         break;
 
+					case("continuous"): //HB04B
+						jogMode = "continuous";
+						console.log("MODE: " + jogMode);
+						break;
+
+					case("step"): //HB04B
+						jogMode = "incremental";
+						console.log("MODE: " + jogMode);
+						break;
+
                     case("sleep"):
                         console.log("MPG goes sleep");
                         break;
 
                     case('reset'):
                         io.sockets.emit('mpg', {key: 'reset'});
-                        resetMachine();
+                        //resetMachine(); // not sure if this is needed on the MPG?
+										  // but it faults out smoothieboard
+                        clearAlarm(2);	// added for HB04B, likely useful for other MPGs
                         break;
                         
                     case("macro1"):
@@ -3933,6 +4122,27 @@ function parseMPGPacket(data) {
                         console.log("Macro7");
                         runMarco(7);
                         break;
+                    
+                    case("function"): // double button on HB04B
+						// function of second button
+						if (tmpCmd2) {
+							switch (tmpCmd2.name) {
+								case("workpiecehome"):
+									setZero('all');
+									break;
+								case("machinehome"): // homing ZXY
+									if (tmpCmd2 != latchedfunction) {
+										latchedfunction = tmpCmd2; // prevent entering more than once
+										home('z');
+										home('x');
+										home('y');
+									}
+									break;
+							}
+						} 
+						
+						
+						break;
 
                     default:
                         console.log("Un-Caught Case: " + tmpCmd.name, tmpCmd.value);
@@ -3940,12 +4150,19 @@ function parseMPGPacket(data) {
                 }
 
             } else {
-                console.log("DIAL: " + dialSetting + " Command Code Unknown: ", data);
+                
+					//console.log("DIAL: " + dialSetting + " Command Code Unknown: ", data);
+				
             }
         }
         break;
     }
 }
+
+// *********************
+// output to MPG display
+// *********************
+
 
 var hb04_write_data = {
     /* header of our packet */
@@ -3979,11 +4196,54 @@ var hb04_write_data = {
     state : 0x01        // 8 bit
 };
 
+var hb04b_write_data = {
+    /* header of our packet */
+    magic1 : 0xFE,      // 8 bit 0x00
+    magic2 : 0xFD,      // 8 bit 0x01
+    day : 0x0C,         // 8 bit 0x02
+    dispind: 0x00,		// 8 bit 0x03
+    /* work pos */
+    x_wc_int : 0,       // 16 bit 0x04 0x05 // line 1
+    x_wc_frac : 0,      // 16 bit 0x06 0x07 // line 1
+    y_wc_int : 0,       // 16 bit 0x08 0x09 // line 2
+    y_wc_frac : 0,      // 16 bit 0x0A 0x0B // line 2
+    z_wc_int : 0,       // 16 bit 0x0C 0x0D // line 3
+    z_wc_frac : 0,      // 16 bit 0x0E 0x0F // line 3
+//    a_wc_int : 0,       // 16 bit
+//    a_wc_frac : 0,      // 16 bit
+    /* machine pos */
+//    x_mc_int : 0,       // 16 bit
+//    x_mc_frac : 0,      // 16 bit
+//    y_mc_int : 0,       // 16 bit
+//    y_mc_frac : 0,      // 16 bit
+//    z_mc_int : 0,       // 16 bit
+//    z_mc_frac : 0,      // 16 bit
+//    a_mc_int : 0,       // 16 bit
+//    a_mc_frac : 0,      // 16 bit
+    /* speed */
+    feedrate_ovr : 100, // 16 bit 0x10 0x11
+    sspeed_ovr : 100,   // 16 bit 0x12 0x13
+    //feedrate : 100,     // 16 bit
+    //sspeed : 100,       // 16 bit
+    //step_mul : 0x01,    // 8 bit
+    //state : 0x01        // 8 bit
+};
+
+// hb04b indicator data
+const hb04b_ind_CONT = 0x00;
+const hb04b_ind_STEP = 0x01;
+const hb04b_ind_MPG = 0x02;
+const hb04b_ind_pct = 0x03;
+
+const hb04b_ind_reset = 0x40;
+const hb04b_ind_machcoord = 0x80;
+
+
+
 function setMpgWPos(pos) {
     switch (mpgType) {
         case 'HB03':
         case 'HB04':
-            hb04_write_data.step_mul = stepMulTable[stepDistance];
 
             hb04_write_data.x_wc_int = parseInt(Math.abs(pos.x));
             var x_wc_frac = parseInt((Math.abs(pos.x) - hb04_write_data.x_wc_int) * 10000);
@@ -4004,13 +4264,64 @@ function setMpgWPos(pos) {
             var feedrate = parseInt((Math.abs(feedOverride) - hb04_write_data.feedrate_int) * 10000);
             if (feedOverride < 0) feedrate = feedrate | 0x8000;
             hb04_write_data.feedrate_ovr = feedrate;
-
+            
             hb04_write_data.spindle_int = parseInt(Math.abs(spindleOverride));
             var spindle = parseInt((Math.abs(spindleOverride) - hb04_write_data.spindle_int) * 10000);
             if (spindleOverride < 0) spindle = spindle | 0x8000;
             hb04_write_data.sspeed_ovr = spindle;
 
+            hb04_write_data.step_mul = stepMulTable[stepDistance];
+
             writeMPG(hb04_write_data);
+            break;
+
+
+        case 'HB04B':
+            hb04b_write_data.x_wc_int = parseInt(Math.abs(pos.x));
+            var x_wc_frac = parseInt((Math.abs(pos.x) - hb04b_write_data.x_wc_int) * 10000);
+            if (pos.x < 0) x_wc_frac = x_wc_frac | 0x8000;
+            hb04b_write_data.x_wc_frac = x_wc_frac;
+
+            hb04b_write_data.y_wc_int = parseInt(Math.abs(pos.y));
+            var y_wc_frac = parseInt((Math.abs(pos.y) - hb04b_write_data.y_wc_int) * 10000);
+            if (pos.y < 0) y_wc_frac = y_wc_frac | 0x8000;
+            hb04b_write_data.y_wc_frac = y_wc_frac;
+
+            hb04b_write_data.z_wc_int = parseInt(Math.abs(pos.z));
+            var z_wc_frac = parseInt((Math.abs(pos.z) - hb04b_write_data.z_wc_int) * 10000);
+            if (pos.z < 0) z_wc_frac = z_wc_frac | 0x8000;
+            hb04b_write_data.z_wc_frac = z_wc_frac;
+
+            hb04b_write_data.feedrate_ovr = parseInt(Math.abs(feedOverride)); // non functional?
+            
+            hb04b_write_data.sspeed_ovr = parseInt(Math.abs(spindleOverride)); // non functional?
+
+			// top indicators
+						
+			if (alarmed == true) {
+				hb04b_write_data.dispind = hb04b_ind_reset; // poor way of indicating
+															// the machine needs to be
+															// reset
+			} else {										// otherwise the RESET
+				hb04b_write_data.dispind = 0x00;			// hides other info
+			}
+
+			switch(jogMode) {
+				case "continuous":
+					hb04b_write_data.dispind |= hb04b_ind_CONT;
+					break;
+				case "incremental":
+					hb04b_write_data.dispind |= hb04b_ind_STEP;
+					break;
+				case "MPG": // unused
+					hb04b_write_data.dispind |= hb04b_ind_MPG;
+					break;
+				case "pct": // unused
+					hb04b_write_data.dispind |= hb04b_ind_pct;
+					break;
+			}
+
+            writeMPG(hb04b_write_data);
             break;
     }
 }
@@ -4050,29 +4361,72 @@ function setMpgWOffset(pos) {
 }
 
 function writeMPG(data) {
-    writeLog('WX:' + data.x_wc_int + '.' + data.x_wc_frac + ', WY:' + data.y_wc_int + '.' + data.y_wc_frac + ', WZ:' + data.z_wc_int + '.' + data.z_wc_frac, 3);
-    //console.log(JSON.stringify(data));
-    var part1 = [6, data.magic1, data.magic2, data.day, data.x_wc_int & 0xFF, data.x_wc_int >> 8, data.x_wc_frac & 0xFF, data.x_wc_frac >> 8];
-    writeLog(JSON.stringify(part1), 3);
-    var part2 = [6, data.y_wc_int & 0xFF, data.y_wc_int >> 8, data.y_wc_frac & 0xFF, data.y_wc_frac >> 8, data.z_wc_int & 0xFF, data.z_wc_int >> 8, data.z_wc_frac & 0xFF];
-    writeLog(JSON.stringify(part2), 3);
-    var part3 = [6, data.z_wc_frac >> 8, data.x_mc_int & 0xFF, data.x_mc_int >> 8, data.x_mc_frac & 0xFF, data.x_mc_frac >> 8, data.y_mc_int & 0xFF, data.y_mc_int >> 8];
-    writeLog(JSON.stringify(part3), 3);
-    var part4 = [6, data.y_mc_frac & 0xFF, data.y_mc_frac >> 8, data.z_mc_int & 0xFF, data.z_mc_int >> 8, data.z_mc_frac & 0xFF, data.z_mc_frac >> 8, data.feedrate_ovr & 0xFF];
-    writeLog(JSON.stringify(part4), 3);
-    var part5 = [6, data.feedrate_ovr >> 8, data.sspeed_ovr & 0xFF, data.sspeed_ovr >> 8, data.feedrate & 0xFF, data.feedrate >> 8, data.sspeed & 0xFF, data.sspeed >> 8];
-    writeLog(JSON.stringify(part5), 3);
-    var part6 = [6, data.step_mul, 0, 0, 0, 0, 0, 0]; //data.state
-    writeLog(JSON.stringify(part6), 3);
-    
-    if (mpgWrite) {
-        mpgWrite.sendFeatureReport(part1);
-        mpgWrite.sendFeatureReport(part2);  
-        mpgWrite.sendFeatureReport(part3);  
-        mpgWrite.sendFeatureReport(part4);  
-        mpgWrite.sendFeatureReport(part5);  
-        mpgWrite.sendFeatureReport(part6);
-    }
+	switch (mpgType) {
+		case 'HB03':
+		case 'HB04':
+			writeLog('WX:' + data.x_wc_int + '.' + data.x_wc_frac + ', WY:' + data.y_wc_int + '.' + data.y_wc_frac + ', WZ:' + data.z_wc_int + '.' + data.z_wc_frac, 3);
+			//console.log(JSON.stringify(data));
+			var part1 = [6, data.magic1, data.magic2, data.day, data.x_wc_int & 0xFF, data.x_wc_int >> 8, data.x_wc_frac & 0xFF, data.x_wc_frac >> 8];
+			writeLog(JSON.stringify(part1), 3);
+			var part2 = [6, data.y_wc_int & 0xFF, data.y_wc_int >> 8, data.y_wc_frac & 0xFF, data.y_wc_frac >> 8, data.z_wc_int & 0xFF, data.z_wc_int >> 8, data.z_wc_frac & 0xFF];
+			writeLog(JSON.stringify(part2), 3);
+			var part3 = [6, data.z_wc_frac >> 8, data.x_mc_int & 0xFF, data.x_mc_int >> 8, data.x_mc_frac & 0xFF, data.x_mc_frac >> 8, data.y_mc_int & 0xFF, data.y_mc_int >> 8];
+			writeLog(JSON.stringify(part3), 3);
+			var part4 = [6, data.y_mc_frac & 0xFF, data.y_mc_frac >> 8, data.z_mc_int & 0xFF, data.z_mc_int >> 8, data.z_mc_frac & 0xFF, data.z_mc_frac >> 8, data.feedrate_ovr & 0xFF];
+			writeLog(JSON.stringify(part4), 3);
+			var part5 = [6, data.feedrate_ovr >> 8, data.sspeed_ovr & 0xFF, data.sspeed_ovr >> 8, data.feedrate & 0xFF, data.feedrate >> 8, data.sspeed & 0xFF, data.sspeed >> 8];
+			writeLog(JSON.stringify(part5), 3);
+			var part6 = [6, data.step_mul, 0, 0, 0, 0, 0, 0]; //data.state
+			writeLog(JSON.stringify(part6), 3);
+			
+			if (mpgWrite) {
+				mpgWrite.sendFeatureReport(part1);
+				mpgWrite.sendFeatureReport(part2);  
+				mpgWrite.sendFeatureReport(part3);  
+				mpgWrite.sendFeatureReport(part4);  
+				mpgWrite.sendFeatureReport(part5);  
+				mpgWrite.sendFeatureReport(part6);
+			}
+			break;
+		case 'HB04B':
+			writeLog('WX:' + data.x_wc_int + '.' + data.x_wc_frac + ', WY:' + data.y_wc_int + '.' + data.y_wc_frac + ', WZ:' + data.z_wc_int + '.' + data.z_wc_frac, 3);
+			//console.log(JSON.stringify(data));
+			var part1 = [6, data.magic1,
+							data.magic2,
+							data.day,
+							data.dispind,
+							data.x_wc_int & 0xFF,
+							data.x_wc_int >> 8,
+							data.x_wc_frac & 0xFF];
+			writeLog(JSON.stringify(part1), 3);
+			
+			var part2 = [6, data.x_wc_frac >> 8,
+							data.y_wc_int & 0xFF,
+							data.y_wc_int >> 8,
+							data.y_wc_frac & 0xFF,
+							data.y_wc_frac >> 8,
+							data.z_wc_int & 0xFF,
+							data.z_wc_int >> 8];
+			writeLog(JSON.stringify(part2), 3);
+			
+			var part3 = [6, data.z_wc_frac & 0xFF,
+							data.z_wc_frac >> 8,
+							data.feedrate_ovr & 0xFF, // non functional?
+							data.feedrate_ovr >> 8,
+							data.sspeed_ovr & 0xFF, // non functional?
+							data.sspeed_ovr >> 8,
+							0x00]; // not sure what to fill with
+			writeLog(JSON.stringify(part3), 3);
+
+			
+			if (mpgWrite) {
+				mpgWrite.sendFeatureReport(part1);
+				mpgWrite.sendFeatureReport(part2);  
+				mpgWrite.sendFeatureReport(part3);
+			}
+		
+		break;
+	}
 }
 //========================
 // MPG implementation end

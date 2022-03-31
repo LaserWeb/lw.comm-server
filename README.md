@@ -27,6 +27,9 @@ The server supports several interfaces to communicate with machines.
 * Marlin (not finished)
 * RepRapFirmware (not finished)
 
+## Preliminary support for manual pulse generators (MPG)
+* XHC HB04
+* XHC HB04B
 
 Please check the wiki for details about the API.
 
