@@ -3,17 +3,17 @@
 This guide assumes some familiarity with [Docker](https://www.docker.com/), if you are new to Docker please start at: https://docs.docker.com/get-started/
 
 Docker user targets:
-- dev
+- dev (default)
 
-## Dev (development snapshot)
-You can run the current developement version of the app in Docker using the commands below.
+## Dev
+You can build and run lw.comm-server in Docker using the commands below.
 - build development image:
 ```
 docker build -t lw.comm-server .
 ```
 - run image:
 ```
-docker run -it --device=/dev/ttyUSB0 --rm -p 8000:8000 lw.comm-server
+docker run -it --device=/dev/ttyUSB0 --rm -p 8000:8000 --cap-add=sys_nice lw.comm-server
 ```
 - connect to app: http://localhost:8000
 
