@@ -31,7 +31,7 @@ _..you have been warned.._
 
 - run image:
 ```
-docker run -it -v /dev:/dev --rm -p 8000:8000 --cap-add=sys_nice lw.comm-server
+docker run -it -v /dev:/dev --rm -p 8000:8000 --cap-add=sys_nice --privileged lw.comm-server
 ```
 - when you conenct the app you should be able to see all USB devices in the selection list
 
