@@ -15,8 +15,22 @@ docker build -t lw.comm-server .
 ```
 docker run -it --device=/dev/ttyUSB0 --rm -p 8000:8000 --cap-add=sys_nice lw.comm-server
 ```
-- connect to app: http://localhost:8000
+- Connect to app: http://localhost:8000
+
+- Change the `--device=` to point to the correct USB device if necesscary, eg `--device=/dev/ttyACM0` etc.
+- To use a different port change the port mapping in the `docker run` command to `<port number>:8000` and adjust the url you connect to appropriately.
 
 ## Run in background
 If you add `-d` to the docker run command it will start the container in detached mode.
 You can use `docker logs -f <uuid>` to follow the output of this, and `docker stop <uuid>` to stop it.
+
+## Allow hot plugging & selection of connected devices
+**This is NOT recommended, since it involves running the container in `--privileged` mode, which is a [potential security risk](https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities).**
+- run image:
+_..you have been warned.._
+
+```
+docker run -it -v /dev:/dev --rm -p 8000:8000 --cap-add=sys_nice lw.comm-server
+```
+- when you conenct the app you should be able to see all USB devices in the selection list
+
