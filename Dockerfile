@@ -24,3 +24,7 @@ ADD docker_entrypoint.sh /
 # Entrypoint (defaulted)
 ENTRYPOINT ["/docker_entrypoint.sh"]
 CMD []
+
+# Bash shell for debug
+from comm-server as bash
+ENTRYPOINT ["/bin/bash"]
