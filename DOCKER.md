@@ -26,9 +26,10 @@ You can use `docker logs -f <uuid>` to follow the output of this, and `docker st
 
 ## Allow hot plugging & selection of connected devices
 **This is NOT recommended, since it involves running the container in `--privileged` mode, which is a [potential security risk](https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities).**
-- run image:
+
 _..you have been warned.._
 
+- run image:
 ```
 docker run -it -v /dev:/dev --rm -p 8000:8000 --cap-add=sys_nice lw.comm-server
 ```
