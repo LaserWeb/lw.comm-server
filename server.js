@@ -3010,12 +3010,12 @@ function laserTest(data) { // Laser Test Fire
                         addQ('G1F1');
                         addQ('M3S' + parseInt(power * maxS / 100));
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             addQ('G4 P' + duration / 1000);
                             addQ('M5S0');
                             laserTestOn = false;
-                            //appSocket.emit('laserTest', 0); //-> Grbl get the real state with status report
+                            //io.sockets.emit('laserTest', 0); //-> Grbl get the real state with status report
                         }
                         send1Q();
                         break;
@@ -3023,7 +3023,7 @@ function laserTest(data) { // Laser Test Fire
                         addQ('M3\n');
                         addQ('fire ' + power + '\n');
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             var divider = 1;
                             if (fDate >= new Date('2017-01-02')) {
@@ -3034,7 +3034,7 @@ function laserTest(data) { // Laser Test Fire
                             addQ('M5');
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration );
                         }
                         send1Q();
@@ -3043,14 +3043,14 @@ function laserTest(data) { // Laser Test Fire
                         addQ('G1F1');
                         addQ('M3S' + parseInt(power * maxS / 100));
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             addQ('G4 P' + duration / 1000);
                             addQ('M5S0');
                             laserTestOn = false;
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration );
                         }
                         send1Q();
@@ -3061,14 +3061,14 @@ function laserTest(data) { // Laser Test Fire
                         addQ('M3 S' + parseInt(power * maxS / 100));
                         addQ('M4');
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             addQ('G4 P' + duration);
                             addQ('M5');
                             laserTestOn = false;
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration );
                         }
                         send1Q();
@@ -3077,14 +3077,14 @@ function laserTest(data) { // Laser Test Fire
                         addQ('G1 F1');
                         addQ('M106 S' + parseInt(power * maxS / 100));
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             addQ('G4 P' + duration);
                             addQ('M107');
                             laserTestOn = false;
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration);
                         }
                         send1Q();
@@ -3093,14 +3093,14 @@ function laserTest(data) { // Laser Test Fire
                         addQ('G1 F1');
                         addQ('M106 S' + parseInt(power * maxS / 100));
                         laserTestOn = true;
-                        appSocket.emit('laserTest', power);
+                        io.sockets.emit('laserTest', power);
                         if (duration > 0) {
                             addQ('G4 P' + duration);
                             addQ('M106 S0');
                             laserTestOn = false;
                             setTimeout(function () {
                                 laserTestOn = false;
-                                appSocket.emit('laserTest', 0);
+                                io.sockets.emit('laserTest', 0);
                             }, duration);
                         }
                         send1Q();
