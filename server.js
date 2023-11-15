@@ -3138,7 +3138,7 @@ function laserTest(data) { // Laser Test Fire
                     break;
                 }
                 laserTestOn = false;
-                appSocket.emit('laserTest', 0);
+                io.sockets.emit('laserTest', 0);
             }
         }
     } else {
