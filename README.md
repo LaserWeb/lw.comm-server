@@ -27,6 +27,15 @@ The server supports several interfaces to communicate with machines.
 * Marlin (not finished)
 * RepRapFirmware (not finished)
 
+## Preliminary support for manual pulse generators (MPG)
+* XHC HB04
+* XHC HB04B
 
 Please check the wiki for details about the API.
 
+## Install notes with Debian 12 bookworm
+I recently upgraded to a new fanless IPC computer and installed Debian 12. I forgot some of the settings required for the lw.comm-server to access the HB04B
+- in /etc/udev/rules.d, add a file with the following line:
+  ATTRS{idVendors}=="10ce", ATTRS{idProduct}=="eb93", MODE="0666", OWNER="root", GROUP="plugdev"
+- make sure your user is in the plugdev group
+- reboot
